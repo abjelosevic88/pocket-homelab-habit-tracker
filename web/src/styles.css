@@ -232,6 +232,9 @@ input.num { width: 90px; text-align: right; }
 .picker-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.25); display: grid; place-items: center; padding: 16px; }
 .picker { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; box-shadow: 0 16px 48px rgba(0,0,0,.3); min-width: 280px; max-width: 420px; }
 .picker-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.picker .pills { display: flex; gap: 6px; flex-wrap: nowrap; }
+.picker .pills .pill { flex: 1 1 0; min-width: 0; height: 44px; padding: 0; }
+.picker form.row input { flex: 1; min-width: 0; }
 .pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .journal { display: flex; flex-direction: column; }
 .journal-line { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
