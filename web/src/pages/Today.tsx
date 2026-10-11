@@ -49,7 +49,7 @@ export default function Today() {
         </div>
       </div>
 
-      <Card title="Habits" flush>
+      <Card title={<>Habits <span className="count">{done}/{scheduled.length}</span></>} flush className="section">
         {scheduled.length === 0 && unscheduled.length === 0 && <div className="pad muted">No habits yet. <Link to="/manage">Add some →</Link></div>}
         <ul className="checkin-list">
           {scheduled.map(h => <HabitRow key={h.id} h={h} onSet={setHabit} />)}
@@ -59,14 +59,14 @@ export default function Today() {
       </Card>
 
       {data.trackers.length > 0 && (
-        <Card title="Scores & measurements" flush>
+        <Card title={<>Scores & measurements <span className="count">{data.trackers.filter(t => t.value !== null).length}/{data.trackers.length}</span></>} flush className="section">
           <ul className="checkin-list">
             {data.trackers.map(t => <TrackerRow key={t.id} t={t} onSet={setTracker} />)}
           </ul>
         </Card>
       )}
 
-      <Card title={settings?.journal_prompt || 'What was great about today?'}>
+      <Card title={settings?.journal_prompt || 'What was great about today?'} flush className="section">
         <JournalBox date={date} text={data.journal} onSaved={t => setData(d => d && { ...d, journal: t })} />
       </Card>
     </div>
@@ -81,9 +81,9 @@ function HabitRow({ h, onSet, dim }: { h: TodayHabit; onSet: (h: TodayHabit, s: 
         <span>{h.name}</span>
         {h.streak > 1 && <span className="streak">🔥{h.streak}</span>}
       </div>
-      <div className="ci-actions">
-        <button className={`mark done ${h.status === 1 ? 'active' : ''}`} onClick={() => onSet(h, 1)} aria-pressed={h.status === 1} aria-label={`${h.name} done`}>✓</button>
-        <button className={`mark missed ${h.status === -1 ? 'active' : ''}`} onClick={() => onSet(h, -1)} aria-pressed={h.status === -1} aria-label={`${h.name} missed`}>✗</button>
+      <div className={`ci-actions ${h.status !== 0 ? 'has-choice' : ''}`}>
+        <button className={`mark done ${h.status === 1 ? 'active' : ''}`} onClick={() => onSet(h, 1)} aria-pressed={h.status === 1} aria-label={`${h.name} done`}><span>✓</span></button>
+        <button className={`mark missed ${h.status === -1 ? 'active' : ''}`} onClick={() => onSet(h, -1)} aria-pressed={h.status === -1} aria-label={`${h.name} missed`}><span>✗</span></button>
       </div>
     </li>
   )
@@ -96,10 +96,10 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
     const steps: number[] = []
     for (let v = t.min_value; v <= t.max_value + 1e-9; v += t.step) steps.push(Number(v.toFixed(4)))
     return (
-      <li className="checkin">
-        <div className="ci-name"><span>{t.name}</span>{!t.higher_is_better && <span className="muted small">lower is better</span>}</div>
-        <div className="pills">
-          {steps.map(s => <button key={s} className={`pill ${bandFor(s, t.min_value, t.max_value, t.higher_is_better)} ${t.value === s ? 'active' : ''}`} onClick={() => onSet(t, t.value === s ? null : s)} aria-pressed={t.value === s}>{fmtNum(s)}</button>)}
+      <li className={`checkin scale-row ${t.value !== null ? 'has-value' : ''}`}>
+        <div className="ci-name"><span>{t.name}</span><span className="muted small">{t.value !== null ? `${fmtNum(t.value)} of ${fmtNum(t.max_value)}` : `${fmtNum(t.min_value)}–${fmtNum(t.max_value)}`}{!t.higher_is_better ? ' · lower is better' : ''}</span></div>
+        <div className="scale" role="radiogroup" aria-label={t.name}>
+          {steps.map(s => <button key={s} role="radio" aria-checked={t.value === s} className={`pill ${bandFor(s, t.min_value, t.max_value, t.higher_is_better)} ${t.value === s ? 'active' : ''}`} onClick={() => onSet(t, t.value === s ? null : s)}>{fmtNum(s)}</button>)}
         </div>
       </li>
     )
@@ -115,8 +115,10 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
       <div className="ci-name"><span>{t.name}</span>{t.previous !== null && <span className="muted small">last {fmtNum(t.previous)} {t.unit}</span>}</div>
       <div className="row">
         {delta !== null && delta !== 0 && <span className={`delta ${(delta < 0) === !t.higher_is_better ? 'ok' : 'bad'}`}>{delta > 0 ? '+' : ''}{fmtNum(delta)}</span>}
-        <input className="num" inputMode="decimal" value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} placeholder="–" />
-        <span className="muted">{t.unit}</span>
+        <label className="num-field">
+          <input inputMode="decimal" value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} placeholder="–" />
+          {t.unit && <span className="unit">{t.unit}</span>}
+        </label>
       </div>
     </li>
   )
@@ -134,11 +136,11 @@ function JournalBox({ date, text, onSaved }: { date: string; text: string; onSav
     try { await api.put(`${V1}/journal/${date}`, { text: v }); last.current = v; onSaved(v); setState('saved'); setTimeout(() => setState('idle'), 1500) } catch (e) { toast((e as Error).message, 'err'); setState('idle') }
   }
   return (
-    <div>
+    <div className="journal-box">
       <textarea rows={3} value={v} onChange={e => setV(e.target.value)} onBlur={save} placeholder="One thing that happened today that was great." maxLength={4000} />
-      <div className="row" style={{ justifyContent: 'space-between', marginTop: 8 }}>
-        <span className="muted small">{state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : 'Saves when you click away'}</span>
-        <button className="btn sm" onClick={save} disabled={v === last.current}>Save</button>
+      <div className="journal-foot">
+        <span className="muted small">{state === 'saving' ? 'Saving…' : state === 'saved' ? '✓ Saved' : v === last.current && v ? '✓ Saved' : 'Saves when you click away'}</span>
+        <button className="btn sm primary" onClick={save} disabled={v === last.current}>Save</button>
       </div>
     </div>
   )
