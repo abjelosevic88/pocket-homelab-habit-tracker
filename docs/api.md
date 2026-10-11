@@ -8,6 +8,8 @@ Authorization: Bearer ph_xxxxxxxx…
 
 Create tokens under **Settings → API tokens**. Dates are `YYYY-MM-DD` in the server's `TZ`; months are `YYYY-MM`.
 
+For a ready-made client, [Pocket Homelab](https://pockethomelab.com/) (iPhone, iPad, Mac, Android) uses this API with a token: the check-in, the month page, the dashboard, insights, and the habits and trackers. See the README's [Companion app](../README.md#companion-app-pocket-homelab) section.
+
 ## Day-to-day
 
 | Method | Path | Notes |

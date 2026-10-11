@@ -22,6 +22,8 @@ Most habit trackers fail because they become another habit you can't stick to. T
 - **A weight row** (or steps, hours, anything with a number).
 - **One good thing per day.** A single line of gratitude journal next to the grid. Optionally one bad thing too (Settings → General).
 
+On the go, **[Pocket Homelab](https://pockethomelab.com/)** is its companion app for iPhone, iPad, Mac and Android: tonight's check-in, the month grid and your streaks in your pocket. See [Companion app](#companion-app-pocket-homelab).
+
 <p align="center"><img src="docs/screenshots/month.png" width="900" alt="Month page"></p>
 
 ## Features
@@ -104,6 +106,25 @@ curl -H "Authorization: Bearer ph_…" https://habits.example.com/api/v1/dashboa
 ```
 
 Everything else is in [docs/api.md](docs/api.md), including a Homepage `customapi` widget and an ntfy reminder example.
+
+## Companion app: Pocket Homelab
+
+[Pocket Homelab](https://pockethomelab.com/) is a native app for iPhone, iPad, Mac and Android that talks to self-hosted services, and Pocket Habits is one of them. It connects with an API token and gives you:
+
+| Area | What you get |
+|---|---|
+| **Check-in** | Today (or any earlier day) with a ✓ and ✗ for every habit, the scores as pills, the number with its change since last time, Yes / No questions and the journal line. A **Habits** tab, and a Home card with today's progress, the month's rate and the perfect streak. |
+| **Month** | The month grid: habits down the side, days across the top, tap a cell to mark it; counts and streaks per habit; the trackers as a line over the three bands; the journal. |
+| **Insights** | Rates, streaks and weekday heat per habit, each tracker's average and line, and what moves your scores. |
+| **Habits & trackers** | Add, edit, reorder, end this month, resume or delete habits and trackers from the phone. |
+
+Setup:
+
+1. In Pocket Habits, create a token under **Settings → API tokens** (it starts with `ph_` and is shown once).
+2. In Pocket Homelab, open **Settings → Services → Pocket Habits** and enter the base URL (e.g. `https://habits.example.com`) and the token, then **Test connection**.
+3. Turn on the **Habits** tab in **Settings → Tabs**.
+
+The token is kept in the device's secure store (the Keychain on Apple devices). Details: [pockethomelab.com/docs/services/habits](https://pockethomelab.com/docs/services/habits).
 
 ## Backups
 
