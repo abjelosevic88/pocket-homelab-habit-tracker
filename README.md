@@ -126,6 +126,14 @@ Setup:
 
 The token is kept in the device's secure store (the Keychain on Apple devices). Details: [pockethomelab.com/docs/services/habits](https://pockethomelab.com/docs/services/habits).
 
+<p align="center">
+  <img src="docs/screenshots/app/habits.png" width="24%" alt="Pocket Homelab: tonight's check-in with a ✓ and ✗ for every habit">
+  <img src="docs/screenshots/app/habits-more.png" width="24%" alt="Pocket Homelab: the sleep score, day rating, weight and the journal line">
+  <img src="docs/screenshots/app/habits-month.png" width="24%" alt="Pocket Homelab: the month grid with the trackers as lines">
+  <img src="docs/screenshots/app/habits-insights.png" width="24%" alt="Pocket Homelab: insights with rates, streaks and weekdays">
+</p>
+<p align="center"><sub>Pocket Homelab on the iPhone: the check-in, the trackers and the journal, the month grid, the insights.</sub></p>
+
 ## Backups
 
 The database is a single file. Use whichever you like:
