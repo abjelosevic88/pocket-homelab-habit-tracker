@@ -80,6 +80,7 @@ function Reminders() {
 
 function Weather() {
   const { f, setF, save, busy } = useSettingsForm()
+  const { settings } = useApp()
   const { toast } = useToast()
   const [q, setQ] = useState('')
   const [places, setPlaces] = useState<GeoPlace[]>([])
@@ -97,15 +98,24 @@ function Weather() {
     try { const r = await api.post<{ days: number }>(`${V1}/weather/refresh`, {}); setDays(r.days); toast(`Fetched ${r.days} days`) } catch (e) { toast((e as Error).message, 'err') } finally { setFetching(false) }
   }
   const hasHome = f.weather_lat !== 0 || f.weather_lon !== 0
+  const unsavedHome = hasHome && (f.weather_lat !== settings?.weather_lat || f.weather_lon !== settings?.weather_lon)
+  const pick = (p: GeoPlace) => { setF({ ...f, weather_place: p.label, weather_lat: p.lat, weather_lon: p.lon }); setPlaces([]); setQ(''); toast(`Home set to ${p.name || p.label} — press Save`) }
   return (
     <Card title="Weather">
       <p className="muted">The day's weather from <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (free, no key): the condition, high and low, rain, sunshine and daylight, for your home location — or for where your phone was, when the companion app sends its location once a day (<code>POST /api/v1/location</code>). It shows on the month page and the check-in, and Insights compares your scores by weather, temperature and daylight.</p>
       <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
-        <Field label="Home location" help={hasHome ? `${f.weather_place || 'Set'} · ${f.weather_lat.toFixed(3)}, ${f.weather_lon.toFixed(3)}` : 'Type a town and pick it from the list.'}>
-          <div className="row"><input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search() } }} placeholder="Town or city" /><button type="button" className="btn" onClick={search} disabled={searching}>Search</button></div>
+        <Field label="Home location" help={hasHome ? undefined : 'Type a town and pick it from the list.'}>
+          {hasHome && (
+            <div className={`callout ${unsavedHome ? 'success' : ''} row geo-home`}>
+              <span className="geo-pin">⌖</span>
+              <span style={{ flex: 1, minWidth: 0 }}><b>{f.weather_place || 'Home'}</b> <span className="muted small">{f.weather_lat.toFixed(3)}, {f.weather_lon.toFixed(3)}</span>{unsavedHome && <span className="muted small"> · not saved yet — press Save below</span>}</span>
+              <button type="button" className="btn ghost sm" onClick={() => setF({ ...f, weather_place: '', weather_lat: 0, weather_lon: 0 })}>Change</button>
+            </div>
+          )}
+          {!hasHome && <div className="row"><input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search() } }} placeholder="Town or city" /><button type="button" className="btn" onClick={search} disabled={searching}>{searching ? 'Searching…' : 'Search'}</button></div>}
           {places.length > 0 && (
             <ul className="geo-list">
-              {places.map(p => <li key={`${p.lat},${p.lon}`}><button type="button" className="btn ghost" onClick={() => { setF({ ...f, weather_place: p.label, weather_lat: p.lat, weather_lon: p.lon }); setPlaces([]); setQ('') }}>{p.label} <span className="muted small">{p.lat.toFixed(2)}, {p.lon.toFixed(2)}</span></button></li>)}
+              {places.map(p => <li key={`${p.lat},${p.lon}`}><button type="button" className="btn ghost" onClick={() => pick(p)}>{p.label} <span className="muted small">{p.lat.toFixed(2)}, {p.lon.toFixed(2)}</span></button></li>)}
             </ul>
           )}
         </Field>
