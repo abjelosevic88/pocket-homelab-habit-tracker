@@ -62,4 +62,12 @@ type Settings struct {
 	ReminderLast    string `json:"-"`
 	SetupComplete   bool   `json:"setup_complete"`
 	DefaultsSeeded  bool   `json:"-"`
+
+	// The day's weather from Open-Meteo, for the home location (or where the phone was).
+	WeatherEnabled bool    `json:"weather_enabled"`
+	WeatherLat     float64 `json:"weather_lat"`
+	WeatherLon     float64 `json:"weather_lon"`
+	WeatherPlace   string  `json:"weather_place"`
+	WeatherUnits   string  `json:"weather_units"` // celsius | fahrenheit
+	WeatherLast    string  `json:"weather_last"`  // when the last fetch ran, RFC 3339; read-only
 }

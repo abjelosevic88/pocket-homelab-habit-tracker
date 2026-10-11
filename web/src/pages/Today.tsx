@@ -5,6 +5,7 @@ import { useApp } from '../lib/app-context'
 import type { TodayHabit, TodayPage, TodayTracker } from '../lib/types'
 import { fmtNum, longDate, shiftDate, todayISO } from '../lib/dates'
 import { Card, Loading, PageHeader, Segmented, bandFor, useAsync, useToast } from '../components/ui'
+import { CONDITION_ICON, weatherLine } from '../components/Weather'
 
 export default function Today() {
   const { date = todayISO() } = useParams()
@@ -46,6 +47,7 @@ export default function Today() {
         <div>
           <div className="big">{allMarked ? (done === scheduled.length ? 'Perfect day.' : `${done} green, ${scheduled.length - done} red.`) : `${scheduled.length - marked} left to mark`}</div>
           <div className="muted small">Takes a minute. Green = did it, red = didn't. The aim is more greens than reds.</div>
+          {data.weather && settings?.weather_enabled && <div className="wx-line" title="The day's weather, from Open-Meteo"><span>{CONDITION_ICON[data.weather.condition] || '·'}</span> {weatherLine(data.weather, settings.weather_units)}</div>}
         </div>
       </div>
 

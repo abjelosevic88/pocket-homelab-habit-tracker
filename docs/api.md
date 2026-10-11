@@ -123,3 +123,18 @@ rest_command:
 ### Prometheus
 
 `/metrics` exposes `pocket_habits_today_done`, `pocket_habits_today_total`, `pocket_habits_month_done`, `pocket_habits_month_missed`, `pocket_habits_perfect_streak`, request counters and row counts.
+
+## Weather & location
+
+The server fetches the day's weather from [Open-Meteo](https://open-meteo.com/) (free, no key) when **Settings → Weather** is on: the condition (`clear`, `partly`, `cloudy`, `fog`, `rain`, `snow`, `storm`), high and low temperature, precipitation, sunshine and daylight hours. The home location is the fallback; a day with a reported location (below) is fetched for that place instead. The scheduler refreshes today and yesterday every three hours and backfills missing days since the first habit (two years at most). The day, month, insights and dashboard answers carry a `weather` field.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/weather?from=&to=` | The stored days: `[{date, code, condition, t_max, t_min, precip_mm, sunshine_h, daylight_h, overridden, lat, lon, place, fetched_at}]`. |
+| `PUT` | `/weather/{date}` | `{"condition": "rain"}` sets a day's condition by hand; `""` puts the fetched one back. |
+| `POST` | `/weather/refresh` | `{"from","to"}` fetches a range now; an empty body refreshes today and yesterday and backfills. Returns `{"days": n}`. |
+| `GET` | `/weather/geocode?q=` | Place lookup for the home location: `[{name, label, lat, lon, timezone}]`. |
+| `GET` | `/location?from=&to=` | The days with a reported location. |
+| `POST` | `/location` | `{"date": "2026-10-11", "lat": 47.37, "lon": 8.54, "place": "Zürich", "source": "iphone"}` — where you were that day (`date` defaults to today). The day's weather is fetched for that place at once and returned as `weather`. Pocket Homelab sends this once a day when it is opened; a Shortcut or Home Assistant can too. |
+
+Insights add `weather: {days, by_condition, by_temperature, by_daylight, units}`, each bucket `{key, label, days, scores: [{tracker_id, tracker_name, avg, n}], habit_rate, done, missed}`.

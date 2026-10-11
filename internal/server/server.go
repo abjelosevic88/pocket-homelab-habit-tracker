@@ -157,6 +157,13 @@ func (s *Server) Router() http.Handler {
 			r.Get("/journal", s.handleJournal)
 			r.Put("/journal/{date}", s.handleSetJournal)
 
+			r.Get("/weather", s.handleWeather)
+			r.Put("/weather/{date}", s.handleSetWeather)
+			r.Post("/weather/refresh", s.handleRefreshWeather)
+			r.Get("/weather/geocode", s.handleGeocode)
+			r.Get("/location", s.handleLocations)
+			r.Post("/location", s.handleSetLocation)
+
 			r.Get("/settings", s.handleGetSettings)
 			r.Put("/settings", s.handlePutSettings)
 			r.Post("/settings/test-reminder", s.handleTestReminder)

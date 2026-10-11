@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import type { Insights as InsightsT, TrackerInsight } from '../lib/types'
+import type { Insights as InsightsT, TrackerInsight, WeatherBucket } from '../lib/types'
+import { CONDITION_ICON } from '../components/Weather'
 import { WEEKDAY_LETTER, fmtNum, pct, shortDate } from '../lib/dates'
 import { Card, Empty, Loading, PageHeader, Segmented, useAsync } from '../components/ui'
 
@@ -69,6 +70,8 @@ export default function Insights() {
         </div>
       </div>
 
+      {data.weather && data.weather.days > 0 && <WeatherCard w={data.weather} />}
+
       {data.journal.length > 0 && (
         <Card title="Good things" actions={<span className="muted small">{data.journal.length} entries</span>}>
           <ul className="journal-read">
@@ -77,6 +80,38 @@ export default function Insights() {
         </Card>
       )}
     </>
+  )
+}
+
+function WeatherCard({ w }: { w: import('../lib/types').WeatherInsights }) {
+  const groups: { title: string; rows: WeatherBucket[] }[] = [
+    { title: 'By weather', rows: w.by_condition },
+    { title: 'By high temperature', rows: w.by_temperature },
+    { title: 'By daylight', rows: w.by_daylight },
+  ].filter(g => g.rows.length > 0)
+  const scoreNames = w.by_condition[0]?.scores.map(s => s.tracker_name) ?? w.by_temperature[0]?.scores.map(s => s.tracker_name) ?? []
+  return (
+    <Card title="Weather and your scores" className="mb" actions={<span className="muted small">{w.days} days with weather</span>}>
+      {groups.map(g => (
+        <div key={g.title} className="mb">
+          <div className="small muted" style={{ marginBottom: 4 }}>{g.title}</div>
+          <table className="table compact">
+            <thead><tr><th /><th className="right">Days</th>{scoreNames.map(n => <th key={n} className="right">{n}</th>)}<th className="right">Habits ✓</th></tr></thead>
+            <tbody>
+              {g.rows.map(b => (
+                <tr key={b.key}>
+                  <td>{CONDITION_ICON[b.key] ? <span>{CONDITION_ICON[b.key]} </span> : null}{b.label}</td>
+                  <td className="right">{b.days}</td>
+                  {b.scores.map(s => <td key={s.tracker_id} className="right">{fmtNum(s.avg)}{s.n ? <span className="muted small"> ({s.n})</span> : ''}</td>)}
+                  <td className="right">{pct(b.habit_rate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <p className="muted small">Each score's average on the days of that kind, and how often habits were green. The daylight rows carry the seasonal signal. Correlation, not proof.</p>
+    </Card>
   )
 }
 

@@ -35,6 +35,7 @@ On the go, **[Pocket Homelab](https://pockethomelab.com/)** is its companion app
 | **Habits** | Scheduled days per habit (Mon/Wed/Fri runs don't count as missed on Tuesday), colours, ordering, start/end dates. *End* a habit and it stays on this month's page but is gone from the next. History is always kept. |
 | **Trackers** | Any 1–5 (or 0–10) score, any measurement with a unit, or a yes/no question ("Headache?"). "Higher is better" or "lower is better" decides which end gets the green band. |
 | **Insights** | Completion rate, current and best streak, rate per weekday, 7-day moving averages, and *what moves your scores*: average sleep score / day rating on days a habit was green vs red, or a yes/no question was yes vs no. |
+| **Weather** | The day's weather from Open-Meteo (no key) for your home location — or for where your phone was, when Pocket Homelab or a Shortcut posts it to `/api/v1/location` once a day. A strip on the month page, a line on the check-in, and *Weather and your scores* in Insights: your scores and habit rate by condition, temperature band and daylight hours. |
 | **Reminder** | One push a day at a time you choose, only if something is still unmarked. ntfy, Apprise or any JSON webhook. |
 | **Automation** | REST API with personal tokens, a single `POST /api/v1/checkin` for iOS Shortcuts / Home Assistant / n8n, `/api/v1/dashboard` for Homepage widgets, Prometheus `/metrics`, `/healthz` + `/readyz`. |
 | **Ops-friendly** | Single static binary, embedded SPA, SQLite with WAL, `VACUUM INTO` backups from the UI/CLI/API, JSON + CSV export, JSON import, proxy auth, non-root container, dark mode. |
@@ -113,7 +114,7 @@ Everything else is in [docs/api.md](docs/api.md), including a Homepage `customap
 
 | Area | What you get |
 |---|---|
-| **Check-in** | Today (or any earlier day) with a ✓ and ✗ for every habit, the scores as pills, the number with its change since last time, Yes / No questions and the journal line. A **Habits** tab, and a Home card with today's progress, the month's rate and the perfect streak. |
+| **Check-in** | Today (or any earlier day) with a ✓ and ✗ for every habit, the scores as pills, the number with its change since last time, Yes / No questions, the day's weather and the journal line. Opened once a day it can send the phone's location, so the weather follows you. A **Habits** tab, and a Home card with today's progress, the month's rate and the perfect streak. |
 | **Month** | The month grid: habits down the side, days across the top, tap a cell to mark it; counts and streaks per habit; the trackers as a line over the three bands; the journal. |
 | **Insights** | Rates, streaks and weekday heat per habit, each tracker's average and line, and what moves your scores. |
 | **Habits & trackers** | Add, edit, reorder, end this month, resume or delete habits and trackers from the phone. |

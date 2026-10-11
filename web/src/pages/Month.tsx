@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { MonthHabit, MonthPage, MonthTracker } from '../lib/types'
+import type { Day, MonthHabit, MonthPage, MonthTracker, WeatherDay } from '../lib/types'
 import { currentMonth, monthTitle, pct, shiftMonth, shortDate } from '../lib/dates'
-import { Card, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
+import { Card, Empty, Loading, Modal, PageHeader, Segmented, useAsync, useToast } from '../components/ui'
+import { CONDITIONS, CONDITION_ICON, CONDITION_LABEL, weatherLine } from '../components/Weather'
 import HabitGrid from '../components/HabitGrid'
 import TrackerChart from '../components/TrackerChart'
 
@@ -15,6 +16,7 @@ export default function Month() {
   const { toast } = useToast()
   const { data, setData, loading, error } = useAsync(() => api.get<MonthPage>(`${V1}/months/${month}`), [month])
   const isCurrent = month === currentMonth()
+  const [wx, setWx] = useState<{ day: Day; w?: WeatherDay } | null>(null)
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -59,7 +61,7 @@ export default function Month() {
       <Card flush className="mb">
         {data.habits.length === 0
           ? <div className="pad"><Empty title="No habits on this page yet">Pick up to seven things you want to do (or avoid) this month. <Link to="/manage">Add habits →</Link></Empty></div>
-          : <HabitGrid days={data.days} habits={data.habits} onCycle={cycle} onEdit={h => navigate(`/manage?habit=${h.id}`)} />}
+          : <HabitGrid days={data.days} habits={data.habits} onCycle={cycle} onEdit={h => navigate(`/manage?habit=${h.id}`)} weather={settings?.weather_enabled ? data.weather : null} units={settings?.weather_units} onWeather={(day, w) => setWx({ day, w })} />}
         {data.trackers.length > 0 && (
           <div className="trackers">
             {data.trackers.map(t => <TrackerChart key={t.id} days={data.days} tracker={t} onSet={setValue} />)}
@@ -70,6 +72,23 @@ export default function Month() {
       <Journal page={data} prompt={settings?.journal_prompt || 'What was great about today?'} badPrompt={settings?.bad_thing_enabled ? (settings.bad_prompt || 'And one thing that was bad?') : null}
         onSaved={(date, text) => setData(d => d && { ...d, journal: { ...d.journal, [date]: text }, summary: { ...d.summary, journal_days: Object.values({ ...d.journal, [date]: text }).filter(Boolean).length } })}
         onSavedBad={(date, text) => setData(d => d && { ...d, journal_bad: { ...d.journal_bad, [date]: text } })} />
+
+      {wx && (
+        <Modal title={`Weather on ${shortDate(wx.day.date)}`} onClose={() => setWx(null)}>
+          {wx.w ? <p className="muted">{weatherLine(wx.w, settings?.weather_units)}{wx.w.overridden ? ' · set by hand' : ''}</p> : <p className="muted">Nothing fetched for this day yet.</p>}
+          <p className="small muted">Set the condition by hand when you were somewhere else or the station was wrong. The numbers stay as fetched.</p>
+          <div className="row wrap" style={{ gap: 8 }}>
+            {CONDITIONS.map(c => (
+              <button key={c} className={`btn ${wx.w?.condition === c ? 'primary' : ''}`} onClick={async () => {
+                try { await api.put(`${V1}/weather/${wx.day.date}`, { condition: c }); setData(await api.get<MonthPage>(`${V1}/months/${month}`)); setWx(null) } catch (e) { toast((e as Error).message, 'err') }
+              }}>{CONDITION_ICON[c]} {CONDITION_LABEL[c]}</button>
+            ))}
+            {wx.w?.overridden && <button className="btn ghost" onClick={async () => {
+              try { await api.put(`${V1}/weather/${wx.day.date}`, { condition: '' }); setData(await api.get<MonthPage>(`${V1}/months/${month}`)); setWx(null) } catch (e) { toast((e as Error).message, 'err') }
+            }}>Back to the fetched one</button>}
+          </div>
+        </Modal>
+      )}
     </>
   )
 }

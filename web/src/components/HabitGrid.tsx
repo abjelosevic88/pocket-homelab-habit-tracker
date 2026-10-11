@@ -1,17 +1,22 @@
-import type { Day, MonthHabit } from '../lib/types'
+import type { Day, MonthHabit, WeatherDay } from '../lib/types'
 import { isoWeekday, shortDate } from '../lib/dates'
+import { CONDITION_ICON, temp, weatherLine } from './Weather'
 
 interface Props {
   days: Day[]
   habits: MonthHabit[]
   onCycle: (habit: MonthHabit, date: string, next: number) => void
   onEdit?: (habit: MonthHabit) => void
+  weather?: Record<string, WeatherDay> | null
+  units?: string
+  onWeather?: (day: Day, w: WeatherDay | undefined) => void
 }
 
 // Click cycles blank -> done (green) -> missed (red) -> blank, like two pens.
 export function nextStatus(cur: number): number { return cur === 0 ? 1 : cur === 1 ? -1 : 0 }
 
-export default function HabitGrid({ days, habits, onCycle, onEdit }: Props) {
+export default function HabitGrid({ days, habits, onCycle, onEdit, weather, units = 'celsius', onWeather }: Props) {
+  const hasWeather = !!weather && Object.keys(weather).length > 0
   return (
     <div className="grid-scroll">
       <table className="habit-grid">
@@ -21,6 +26,23 @@ export default function HabitGrid({ days, habits, onCycle, onEdit }: Props) {
             {days.map(d => <th key={d.date} className={`day ${d.weekend ? 'weekend' : ''} ${d.today ? 'today' : ''}`} title={shortDate(d.date)}><span className="num">{d.day}</span><span className="wd">{d.label}</span></th>)}
             <th className="sum-col">✓ / ✗</th>
           </tr>
+          {hasWeather && (
+            <tr className="wx-row">
+              <th className="name-col" scope="row"><span className="wx-label">Weather</span></th>
+              {days.map(d => {
+                const w = weather?.[d.date]
+                return (
+                  <th key={d.date} className={`day wx ${d.today ? 'today' : ''}`}>
+                    <button type="button" className="wx-cell" disabled={d.future} title={w ? weatherLine(w, units) : d.future ? '' : 'No weather for this day yet — click to set it'} onClick={() => onWeather?.(d, w)}>
+                      <span className="wx-i">{w ? (CONDITION_ICON[w.condition] || '·') : ''}</span>
+                      <span className="wx-t">{w && w.t_max !== null ? temp(w.t_max, units) : ''}</span>
+                    </button>
+                  </th>
+                )
+              })}
+              <th className="sum-col" />
+            </tr>
+          )}
         </thead>
         <tbody>
           {habits.map(h => (

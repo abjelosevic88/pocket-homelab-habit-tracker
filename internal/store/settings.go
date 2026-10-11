@@ -7,7 +7,7 @@ import (
 
 // GetSettings loads all settings with defaults applied.
 func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
-	st := Settings{Title: "Pocket Habits", WeekStart: 1, Landing: "month", JournalPrompt: "What was great about today?", BadPrompt: "And one thing that was bad?", ReminderFormat: "ntfy"}
+	st := Settings{Title: "Pocket Habits", WeekStart: 1, Landing: "month", JournalPrompt: "What was great about today?", BadPrompt: "And one thing that was bad?", ReminderFormat: "ntfy", WeatherUnits: "celsius"}
 	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings`)
 	if err != nil {
 		return st, err
@@ -55,6 +55,20 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 			st.SetupComplete = v == "1"
 		case "defaults_seeded":
 			st.DefaultsSeeded = v == "1"
+		case "weather_enabled":
+			st.WeatherEnabled = v == "1"
+		case "weather_lat":
+			st.WeatherLat, _ = strconv.ParseFloat(v, 64)
+		case "weather_lon":
+			st.WeatherLon, _ = strconv.ParseFloat(v, 64)
+		case "weather_place":
+			st.WeatherPlace = v
+		case "weather_units":
+			if v == "fahrenheit" {
+				st.WeatherUnits = v
+			}
+		case "weather_last":
+			st.WeatherLast = v
 		}
 	}
 	return st, rows.Err()
@@ -81,6 +95,12 @@ func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
 		"reminder_last":     st.ReminderLast,
 		"setup_complete":    b(st.SetupComplete),
 		"defaults_seeded":   b(st.DefaultsSeeded),
+		"weather_enabled":   b(st.WeatherEnabled),
+		"weather_lat":       strconv.FormatFloat(st.WeatherLat, 'f', -1, 64),
+		"weather_lon":       strconv.FormatFloat(st.WeatherLon, 'f', -1, 64),
+		"weather_place":     st.WeatherPlace,
+		"weather_units":     st.WeatherUnits,
+		"weather_last":      st.WeatherLast,
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {

@@ -58,6 +58,8 @@ type MonthPage struct {
 	Journal    map[string]string `json:"journal"`
 	JournalBad map[string]string `json:"journal_bad"`
 	Summary    MonthSummary      `json:"summary"`
+	// The weather by date, when the server fetches it; otherwise empty.
+	Weather map[string]WeatherDay `json:"weather"`
 }
 
 var weekdayLetters = map[int]string{1: "M", 2: "T", 3: "W", 4: "T", 5: "F", 6: "S", 7: "S"}
@@ -117,7 +119,11 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 			bad[d] = e.Bad
 		}
 	}
-	page := &MonthPage{Month: month, Days: days, Journal: journal, JournalBad: bad, Habits: []MonthHabit{}, Trackers: []MonthTracker{}}
+	weather, err := s.Weather(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+	page := &MonthPage{Month: month, Days: days, Journal: journal, JournalBad: bad, Habits: []MonthHabit{}, Trackers: []MonthTracker{}, Weather: weather}
 	perfect := map[string]bool{}
 	for _, d := range days {
 		if !d.Future {
@@ -233,6 +239,8 @@ type TodayPage struct {
 	JournalBad string         `json:"journal_bad"`
 	Done       int            `json:"done"`
 	Total      int            `json:"total"`
+	// The day's weather, when the server has it.
+	Weather *WeatherDay `json:"weather"`
 }
 
 // TodayHabit is one habit's state for a day.
@@ -282,6 +290,9 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 		wd = 7
 	}
 	page := &TodayPage{Date: date, Weekday: wd, Journal: journal[date].Text, JournalBad: journal[date].Bad, Habits: []TodayHabit{}, Trackers: []TodayTracker{}}
+	if w, err := s.WeatherDay(ctx, date); err == nil {
+		page.Weather = &w
+	}
 	for _, h := range habits {
 		if !h.ActiveOn(date) {
 			continue
@@ -327,6 +338,8 @@ type Dashboard struct {
 	PerfectStreak int      `json:"perfect_streak"`
 	BestStreak    int      `json:"best_habit_streak"`
 	BestHabit     string   `json:"best_habit"`
+	// Today's weather, when the server has it.
+	Weather *WeatherDay `json:"weather"`
 }
 
 // DashboardStats computes the dashboard for today.
@@ -352,6 +365,7 @@ func (s *Store) DashboardStats(ctx context.Context) (*Dashboard, error) {
 		}
 	}
 	d.PerfectStreak = s.perfectStreak(ctx, today)
+	d.Weather = day.Weather
 	return d, nil
 }
 
@@ -461,6 +475,8 @@ type Insights struct {
 	Trackers     []TrackerInsight `json:"trackers"`
 	Correlations []Correlation    `json:"correlations"`
 	Journal      []JournalLine    `json:"journal"`
+	// The weather and the scores, when the server fetches the weather.
+	Weather *WeatherInsights `json:"weather"`
 }
 
 // JournalLine is one dated journal entry.
@@ -660,6 +676,12 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 	sort.Sort(sort.Reverse(sort.StringSlice(jd)))
 	for _, d := range jd {
 		out.Journal = append(out.Journal, JournalLine{Date: d, Text: journal[d].Text, Bad: journal[d].Bad})
+	}
+	st, _ := s.GetSettings(ctx)
+	if st.WeatherEnabled {
+		if wi, err := s.WeatherInsightsFor(ctx, from, to, habits, trackers, hEntries, tEntries, st.WeatherUnits); err == nil {
+			out.Weather = wi
+		}
 	}
 	return out, nil
 }

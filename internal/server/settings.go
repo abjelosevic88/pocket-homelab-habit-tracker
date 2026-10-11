@@ -64,10 +64,39 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(in.BadPrompt) == "" {
 		in.BadPrompt = "And one thing that was bad?"
 	}
+	if in.WeatherUnits != "fahrenheit" {
+		in.WeatherUnits = "celsius"
+	}
+	if in.WeatherLat < -90 || in.WeatherLat > 90 || in.WeatherLon < -180 || in.WeatherLon > 180 {
+		writeErr(w, http.StatusBadRequest, "weather_lat/weather_lon out of range")
+		return
+	}
+	if in.WeatherEnabled && in.WeatherLat == 0 && in.WeatherLon == 0 {
+		writeErr(w, http.StatusBadRequest, "set the home location before turning the weather on")
+		return
+	}
+	in.WeatherPlace = strings.TrimSpace(in.WeatherPlace)
 	in.ReminderLast, in.SetupComplete, in.DefaultsSeeded = cur.ReminderLast, cur.SetupComplete, cur.DefaultsSeeded
+	// A changed place starts the fetches over: the stored days were for the old one.
+	in.WeatherLast = cur.WeatherLast
+	moved := in.WeatherLat != cur.WeatherLat || in.WeatherLon != cur.WeatherLon
+	if moved || (in.WeatherEnabled && !cur.WeatherEnabled) {
+		in.WeatherLast = ""
+	}
 	if err := s.store.SaveSettings(r.Context(), in); err != nil {
 		s.fail(w, err, "save settings")
 		return
+	}
+	if in.WeatherEnabled && (moved || !cur.WeatherEnabled) {
+		// Fetch the recent days right away so the pages show something; the rest trickles in.
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			from := time.Now().AddDate(0, 0, -45).Format("2006-01-02")
+			if _, err := s.refreshWeather(ctx, in, from, store.Today()); err != nil {
+				s.log.Warn("weather first fetch failed", "err", err)
+			}
+		}()
 	}
 	writeJSON(w, http.StatusOK, in)
 }
@@ -90,6 +119,7 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 // RunScheduler is called every minute: it sends the nightly reminder once per
 // day at the configured time when something is still unmarked.
 func (s *Server) RunScheduler(ctx context.Context) {
+	s.RunWeather(ctx)
 	st, err := s.store.GetSettings(ctx)
 	if err != nil || st.ReminderTime == "" || st.ReminderURL == "" {
 		return

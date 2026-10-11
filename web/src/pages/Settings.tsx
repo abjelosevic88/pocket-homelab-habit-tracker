@@ -1,20 +1,21 @@
 import { useState } from 'react'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, Settings as SettingsT } from '../lib/types'
+import type { GeoPlace, APIToken, Settings as SettingsT } from '../lib/types'
 import { Card, Confirm, Field, Loading, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
 
-type Tab = 'general' | 'reminders' | 'profile' | 'api' | 'data' | 'about'
+type Tab = 'general' | 'reminders' | 'weather' | 'profile' | 'api' | 'data' | 'about'
 
 export default function Settings() {
   const [tab, setTab] = useState<Tab>('general')
   return (
     <>
       <PageHeader title="Settings" />
-      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'reminders', label: 'Reminder' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
+      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'reminders', label: 'Reminder' }, { id: 'weather', label: 'Weather' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
       <div className="mt">
         {tab === 'general' && <General />}
         {tab === 'reminders' && <Reminders />}
+        {tab === 'weather' && <Weather />}
         {tab === 'profile' && <Profile />}
         {tab === 'api' && <Tokens />}
         {tab === 'data' && <Data />}
@@ -72,6 +73,46 @@ function Reminders() {
         </Field>
         <Field label="Format"><Segmented value={f.reminder_format} onChange={v => setF({ ...f, reminder_format: v })} options={[{ value: 'ntfy', label: 'ntfy' }, { value: 'apprise', label: 'Apprise' }, { value: 'json', label: 'JSON webhook' }]} /></Field>
         <div className="row"><button className="btn primary" onClick={save} disabled={busy}>Save</button><button className="btn" onClick={test} disabled={testing || !f.reminder_url}>Send test</button></div>
+      </div>
+    </Card>
+  )
+}
+
+function Weather() {
+  const { f, setF, save, busy } = useSettingsForm()
+  const { toast } = useToast()
+  const [q, setQ] = useState('')
+  const [places, setPlaces] = useState<GeoPlace[]>([])
+  const [searching, setSearching] = useState(false)
+  const [fetching, setFetching] = useState(false)
+  const [days, setDays] = useState<number | null>(null)
+  if (!f) return <Loading />
+  const search = async () => {
+    if (q.trim().length < 2) return
+    setSearching(true)
+    try { setPlaces(await api.get<GeoPlace[]>(`${V1}/weather/geocode?q=${encodeURIComponent(q.trim())}`)) } catch (e) { toast((e as Error).message, 'err') } finally { setSearching(false) }
+  }
+  const fetchNow = async () => {
+    setFetching(true)
+    try { const r = await api.post<{ days: number }>(`${V1}/weather/refresh`, {}); setDays(r.days); toast(`Fetched ${r.days} days`) } catch (e) { toast((e as Error).message, 'err') } finally { setFetching(false) }
+  }
+  const hasHome = f.weather_lat !== 0 || f.weather_lon !== 0
+  return (
+    <Card title="Weather">
+      <p className="muted">The day's weather from <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (free, no key): the condition, high and low, rain, sunshine and daylight, for your home location — or for where your phone was, when the companion app sends its location once a day (<code>POST /api/v1/location</code>). It shows on the month page and the check-in, and Insights compares your scores by weather, temperature and daylight.</p>
+      <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
+        <Field label="Home location" help={hasHome ? `${f.weather_place || 'Set'} · ${f.weather_lat.toFixed(3)}, ${f.weather_lon.toFixed(3)}` : 'Type a town and pick it from the list.'}>
+          <div className="row"><input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search() } }} placeholder="Town or city" /><button type="button" className="btn" onClick={search} disabled={searching}>Search</button></div>
+          {places.length > 0 && (
+            <ul className="geo-list">
+              {places.map(p => <li key={`${p.lat},${p.lon}`}><button type="button" className="btn ghost" onClick={() => { setF({ ...f, weather_place: p.label, weather_lat: p.lat, weather_lon: p.lon }); setPlaces([]); setQ('') }}>{p.label} <span className="muted small">{p.lat.toFixed(2)}, {p.lon.toFixed(2)}</span></button></li>)}
+            </ul>
+          )}
+        </Field>
+        <Field label="Fetch the weather"><Segmented value={f.weather_enabled ? 'on' : 'off'} onChange={v => setF({ ...f, weather_enabled: v === 'on' })} options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'On' }]} /></Field>
+        <Field label="Temperatures in"><Segmented value={f.weather_units} onChange={v => setF({ ...f, weather_units: v })} options={[{ value: 'celsius', label: '°C' }, { value: 'fahrenheit', label: '°F' }]} /></Field>
+        <div className="row"><button className="btn primary" onClick={save} disabled={busy || (f.weather_enabled && !hasHome)}>Save</button><button className="btn" onClick={fetchNow} disabled={fetching || !f.weather_enabled}>Fetch now</button>{days !== null && <span className="muted small">{days} days written</span>}{f.weather_last && <span className="muted small">last fetch {f.weather_last.slice(0, 16).replace('T', ' ')}</span>}</div>
+        <p className="muted small">Turning it on fetches the last six weeks at once and the rest since your first habit in the background; the scheduler refreshes today and yesterday every three hours. A day's condition can be changed by hand on the month page.</p>
       </div>
     </Card>
   )
