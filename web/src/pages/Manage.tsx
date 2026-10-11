@@ -53,6 +53,7 @@ export default function Manage() {
                 </button>
                 <div className="row">
                   <button className="btn ghost sm" title="Take it off next month's page" onClick={() => setConfirm({ title: `Stop tracking “${h.name}”?`, message: `It stays on ${monthTitle(currentMonth())}'s page and disappears from ${monthTitle(shiftMonth(currentMonth(), 1))} onwards. History is kept.`, run: () => run(() => api.post(`${V1}/habits/${h.id}/end`, {}), 'Habit ends this month') })}>End</button>
+                  <button className="btn ghost sm danger-text" title="Delete the habit and all its marks" onClick={() => setConfirm({ title: `Delete “${h.name}”?`, message: 'This also deletes every day you marked for it. To keep the history, use End instead.', run: () => run(() => api.del(`${V1}/habits/${h.id}`), 'Habit deleted') })}>Delete</button>
                 </div>
               </li>
             ))}
@@ -80,7 +81,10 @@ export default function Manage() {
                   <span className="nm">{t.name}</span>
                   <span className="muted small">{t.kind === 'scale' ? `scale ${t.min_value}–${t.max_value}` : `number${t.unit ? ' · ' + t.unit : ''}`}{t.higher_is_better ? '' : ' · lower is better'}</span>
                 </button>
-                <div className="row"><button className="btn ghost sm" onClick={() => setConfirm({ title: `Stop tracking “${t.name}”?`, message: 'It stays on this month’s page and disappears from next month. History is kept.', run: () => run(() => api.post(`${V1}/trackers/${t.id}/end`, {}), 'Tracker ends this month') })}>End</button></div>
+                <div className="row">
+                  <button className="btn ghost sm" title="Take it off next month's page" onClick={() => setConfirm({ title: `Stop tracking “${t.name}”?`, message: 'It stays on this month’s page and disappears from next month. History is kept.', run: () => run(() => api.post(`${V1}/trackers/${t.id}/end`, {}), 'Tracker ends this month') })}>End</button>
+                  <button className="btn ghost sm danger-text" title="Delete the tracker and all its values" onClick={() => setConfirm({ title: `Delete “${t.name}”?`, message: 'This also deletes every value recorded for it. To keep the history, use End instead.', run: () => run(() => api.del(`${V1}/trackers/${t.id}`), 'Tracker deleted') })}>Delete</button>
+                </div>
               </li>
             ))}
           </ul>
@@ -99,7 +103,7 @@ export default function Manage() {
       </div>
 
       {editHabit && <HabitModal habit={editHabit} onClose={() => setEditHabit(null)} onSaved={() => { setEditHabit(null); habits.reload() }} onDelete={h => { setEditHabit(null); setConfirm({ title: `Delete “${h.name}”?`, message: 'This also deletes every day you marked for it. To keep the history, end it instead.', run: () => run(() => api.del(`${V1}/habits/${h.id}`), 'Habit deleted') }) }} />}
-      {editTracker && <TrackerModal tracker={editTracker} onClose={() => setEditTracker(null)} onSaved={() => { setEditTracker(null); trackers.reload() }} />}
+      {editTracker && <TrackerModal tracker={editTracker} onClose={() => setEditTracker(null)} onSaved={() => { setEditTracker(null); trackers.reload() }} onDelete={t => { setEditTracker(null); setConfirm({ title: `Delete “${t.name}”?`, message: 'This also deletes every value recorded for it. To keep the history, use End instead.', run: () => run(() => api.del(`${V1}/trackers/${t.id}`), 'Tracker deleted') }) }} />}
       {confirm && <Confirm title={confirm.title} message={confirm.message} onCancel={() => setConfirm(null)} onConfirm={async () => { const c = confirm; setConfirm(null); await c.run() }} />}
     </>
   )
@@ -154,7 +158,7 @@ function HabitModal({ habit, onClose, onSaved, onDelete }: { habit: Partial<Habi
   )
 }
 
-function TrackerModal({ tracker, onClose, onSaved }: { tracker: Partial<Tracker>; onClose: () => void; onSaved: () => void }) {
+function TrackerModal({ tracker, onClose, onSaved, onDelete }: { tracker: Partial<Tracker>; onClose: () => void; onSaved: () => void; onDelete: (t: Tracker) => void }) {
   const { toast } = useToast()
   const [f, setF] = useState({ name: tracker.name || '', kind: tracker.kind || 'scale', min_value: tracker.min_value ?? 1, max_value: tracker.max_value ?? 5, step: tracker.step ?? 1, unit: tracker.unit || '', higher_is_better: tracker.higher_is_better ?? true, start_date: tracker.start_date || todayISO(), end_date: tracker.end_date || '' })
   const [busy, setBusy] = useState(false)
@@ -193,6 +197,7 @@ function TrackerModal({ tracker, onClose, onSaved }: { tracker: Partial<Tracker>
           <Field label="End date (optional)"><input type="date" value={f.end_date} onChange={e => setF({ ...f, end_date: e.target.value })} /></Field>
         </div>
         <div className="form-actions">
+          {tracker.id && <button type="button" className="btn ghost danger-text" onClick={() => onDelete(tracker as Tracker)}>Delete</button>}
           <span className="spacer" />
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" disabled={busy}>{tracker.id ? 'Save' : 'Add tracker'}</button>
