@@ -133,6 +133,8 @@ The token is kept in the device's secure store (the Keychain on Apple devices). 
   <img src="docs/screenshots/app/habits-insights.png" width="24%" alt="Pocket Homelab: insights with rates, streaks and weekdays">
 </p>
 <p align="center"><sub>Pocket Homelab on the iPhone: the check-in, the trackers and the journal, the month grid, the insights.</sub></p>
+<p align="center"><img src="docs/screenshots/app/habits-mac.png" width="900" alt="Pocket Homelab on the Mac: the Habits workspace with the day's figures, the habits table, the trackers, the journal box and the month at the right"></p>
+<p align="center"><sub>The Habits workspace on the Mac.</sub></p>
 
 ## Backups
 
