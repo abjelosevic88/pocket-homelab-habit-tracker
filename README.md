@@ -117,6 +117,7 @@ Everything else is in [docs/api.md](docs/api.md), including a Homepage `customap
 | **Month** | The month grid: habits down the side, days across the top, tap a cell to mark it; counts and streaks per habit; the trackers as a line over the three bands; the journal. |
 | **Insights** | Rates, streaks and weekday heat per habit, each tracker's average and line, and what moves your scores. |
 | **Habits & trackers** | Add, edit, reorder, end this month, resume or delete habits and trackers from the phone. |
+| **Settings** | Pocket Habits' own settings from the phone or the Mac: the title, week start and landing page, the journal prompts, and the reminder (time, ntfy / Apprise / webhook, a test). |
 
 Setup:
 
