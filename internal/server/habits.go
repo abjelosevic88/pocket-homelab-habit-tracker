@@ -285,8 +285,11 @@ func (in trackerInput) apply(t *store.Tracker) string {
 	if in.Kind != "" {
 		t.Kind = in.Kind
 	}
-	if t.Kind != "scale" && t.Kind != "number" {
-		return "kind must be scale or number"
+	if t.Kind != "scale" && t.Kind != "number" && t.Kind != "yesno" {
+		return "kind must be scale, number or yesno"
+	}
+	if t.Kind == "yesno" {
+		t.MinValue, t.MaxValue, t.Step, t.Unit = 0, 1, 1, ""
 	}
 	if in.MinValue != nil {
 		t.MinValue = *in.MinValue
@@ -338,6 +341,9 @@ func (s *Server) handleCreateTracker(w http.ResponseWriter, r *http.Request) {
 	t := &store.Tracker{Kind: "scale", MinValue: 1, MaxValue: 5, Step: 1, HigherIsBetter: true}
 	if in.Kind == "number" {
 		t.MinValue, t.MaxValue, t.Step, t.HigherIsBetter = 0, 0, 0.1, false
+	}
+	if in.Kind == "yesno" {
+		t.MinValue, t.MaxValue, t.Step, t.HigherIsBetter = 0, 1, 1, false
 	}
 	if msg := in.apply(t); msg != "" {
 		writeErr(w, http.StatusBadRequest, msg)
@@ -455,6 +461,10 @@ func (s *Server) handleSetTrackerEntry(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Value != nil && t.Kind == "scale" && (*in.Value < t.MinValue || *in.Value > t.MaxValue) {
 		writeErr(w, http.StatusBadRequest, "value out of range")
+		return
+	}
+	if in.Value != nil && t.Kind == "yesno" && *in.Value != 0 && *in.Value != 1 {
+		writeErr(w, http.StatusBadRequest, "value must be 1 (yes) or 0 (no)")
 		return
 	}
 	if err := s.store.SetTrackerEntry(r.Context(), t.ID, date, in.Value); err != nil {

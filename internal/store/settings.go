@@ -7,7 +7,7 @@ import (
 
 // GetSettings loads all settings with defaults applied.
 func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
-	st := Settings{Title: "Pocket Habits", WeekStart: 1, Landing: "month", JournalPrompt: "What was great about today?", ReminderFormat: "ntfy"}
+	st := Settings{Title: "Pocket Habits", WeekStart: 1, Landing: "month", JournalPrompt: "What was great about today?", BadPrompt: "And one thing that was bad?", ReminderFormat: "ntfy"}
 	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings`)
 	if err != nil {
 		return st, err
@@ -34,6 +34,12 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 		case "journal_prompt":
 			if v != "" {
 				st.JournalPrompt = v
+			}
+		case "bad_thing_enabled":
+			st.BadThingEnabled = v == "1"
+		case "bad_prompt":
+			if v != "" {
+				st.BadPrompt = v
 			}
 		case "reminder_time":
 			st.ReminderTime = v
@@ -63,16 +69,18 @@ func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
 		return "0"
 	}
 	kv := map[string]string{
-		"title":           st.Title,
-		"week_start":      strconv.Itoa(st.WeekStart),
-		"landing":         st.Landing,
-		"journal_prompt":  st.JournalPrompt,
-		"reminder_time":   st.ReminderTime,
-		"reminder_url":    st.ReminderURL,
-		"reminder_format": st.ReminderFormat,
-		"reminder_last":   st.ReminderLast,
-		"setup_complete":  b(st.SetupComplete),
-		"defaults_seeded": b(st.DefaultsSeeded),
+		"title":             st.Title,
+		"week_start":        strconv.Itoa(st.WeekStart),
+		"landing":           st.Landing,
+		"journal_prompt":    st.JournalPrompt,
+		"bad_thing_enabled": b(st.BadThingEnabled),
+		"bad_prompt":        st.BadPrompt,
+		"reminder_time":     st.ReminderTime,
+		"reminder_url":      st.ReminderURL,
+		"reminder_format":   st.ReminderFormat,
+		"reminder_last":     st.ReminderLast,
+		"setup_complete":    b(st.SetupComplete),
+		"defaults_seeded":   b(st.DefaultsSeeded),
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {

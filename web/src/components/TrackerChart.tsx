@@ -22,6 +22,7 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
   const [pick, setPick] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const isScale = tracker.kind === 'scale'
+  const isYesNo = tracker.kind === 'yesno'
   const vals = days.map(d => tracker.entries[d.date]).filter(v => v !== undefined)
   let lo = tracker.min_value, hi = tracker.max_value
   if (!isScale) {
@@ -40,8 +41,14 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
   const steps: number[] = []
   if (isScale) for (let v = tracker.min_value; v <= tracker.max_value + 1e-9; v += tracker.step) steps.push(Number(v.toFixed(4)))
 
+  const cycleYesNo = (d: Day) => {
+    if (d.future) return
+    const cur = tracker.entries[d.date]
+    onSet(tracker, d.date, cur === undefined ? 1 : cur === 1 ? 0 : null)
+  }
   const open = (d: Day) => {
     if (d.future) return
+    if (isYesNo) { cycleYesNo(d); return }
     setPick(d.date)
     setDraft(tracker.entries[d.date] !== undefined ? String(tracker.entries[d.date]) : '')
   }
@@ -52,6 +59,34 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
     setPick(null)
   }
   const bandY = (frac: number) => PAD_T + (1 - frac) * (H - PAD_T - PAD_B)
+
+  if (isYesNo) {
+    const yes = pts.filter(p => p.v === 1).length
+    const YH = 40
+    const yesTone = tracker.higher_is_better ? 'good' : 'bad', noTone = tracker.higher_is_better ? 'bad' : 'good'
+    return (
+      <div className="tracker-row yesno">
+        <div className="grid-scroll">
+          <svg className="tracker-svg" width={width} height={YH} role="img" aria-label={`${tracker.name} this month`}>
+            {days.map((d, i) => d.weekend ? <rect key={d.date} className="weekend-col" x={NAME + i * COL} y={0} width={COL} height={YH} /> : null)}
+            {days.map((d, i) => d.today ? <rect key={d.date + 't'} className="today-col" x={NAME + i * COL} y={0} width={COL} height={YH} /> : null)}
+            <foreignObject x={0} y={0} width={NAME} height={YH}>
+              <div className="tracker-label"><strong>{tracker.name}</strong><span className="muted small">yes / no</span></div>
+            </foreignObject>
+            {days.map((d, i) => {
+              const v = tracker.entries[d.date]
+              const cls = v === 1 ? `yn-dot ${yesTone}` : v === 0 ? `yn-dot ${noTone} no` : 'yn-dot empty'
+              return <circle key={d.date} className={cls} cx={x(i)} cy={YH / 2} r={v === undefined ? 3 : 7}><title>{`${shortDate(d.date)}: ${v === 1 ? 'yes' : v === 0 ? 'no' : d.future ? '' : 'not marked — click to cycle'}`}</title></circle>
+            })}
+            {days.map((d, i) => <rect key={d.date + 'h'} className={`hit ${d.future ? 'future' : ''}`} x={NAME + i * COL} y={0} width={COL} height={YH} onClick={() => open(d)} />)}
+            <foreignObject x={NAME + days.length * COL} y={0} width={SUM} height={YH}>
+              <div className="tracker-sum"><strong>{yes}</strong><span className="muted small">yes</span></div>
+            </foreignObject>
+          </svg>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="tracker-row">

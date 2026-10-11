@@ -61,6 +61,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(in.JournalPrompt) == "" {
 		in.JournalPrompt = "What was great about today?"
 	}
+	if strings.TrimSpace(in.BadPrompt) == "" {
+		in.BadPrompt = "And one thing that was bad?"
+	}
 	in.ReminderLast, in.SetupComplete, in.DefaultsSeeded = cur.ReminderLast, cur.SetupComplete, cur.DefaultsSeeded
 	if err := s.store.SaveSettings(r.Context(), in); err != nil {
 		s.fail(w, err, "save settings")
@@ -237,7 +240,7 @@ func (s *Server) buildExport(ctx context.Context) (*Export, error) {
 	if err != nil {
 		return nil, err
 	}
-	j, err := s.store.Journal(ctx, "0000-01-01", "9999-12-31")
+	j, err := s.store.JournalFull(ctx, "0000-01-01", "9999-12-31")
 	if err != nil {
 		return nil, err
 	}
@@ -253,8 +256,8 @@ func (s *Server) buildExport(ctx context.Context) (*Export, error) {
 			ex.TrackerEntries = append(ex.TrackerEntries, trackerEntryRow{t.ID, d, v})
 		}
 	}
-	for d, t := range j {
-		ex.Journal = append(ex.Journal, store.JournalLine{Date: d, Text: t})
+	for d, e := range j {
+		ex.Journal = append(ex.Journal, store.JournalLine{Date: d, Text: e.Text, Bad: e.Bad})
 	}
 	sortRows(ex)
 	return ex, nil
@@ -299,7 +302,12 @@ func (s *Server) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 		_ = cw.Write([]string{e.Date, "tracker", strconv.FormatInt(e.TrackerID, 10), names["tracker:"+strconv.FormatInt(e.TrackerID, 10)], strconv.FormatFloat(e.Value, 'f', -1, 64)})
 	}
 	for _, j := range ex.Journal {
-		_ = cw.Write([]string{j.Date, "journal", "", "", j.Text})
+		if j.Text != "" {
+			_ = cw.Write([]string{j.Date, "journal", "", "", j.Text})
+		}
+		if j.Bad != "" {
+			_ = cw.Write([]string{j.Date, "journal_bad", "", "", j.Bad})
+		}
 	}
 	cw.Flush()
 }
@@ -375,8 +383,9 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, j := range ex.Journal {
-		if validDate(j.Date) && j.Text != "" {
-			if err := s.store.SetJournal(ctx, j.Date, j.Text); err == nil {
+		if validDate(j.Date) && (j.Text != "" || j.Bad != "") {
+			bad := j.Bad
+			if err := s.store.SetJournal(ctx, j.Date, j.Text, &bad); err == nil {
 				n++
 			}
 		}

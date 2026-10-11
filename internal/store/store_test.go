@@ -112,7 +112,8 @@ func TestTrackersJournalAndInsights(t *testing.T) {
 		_ = s.SetHabitEntry(ctx, h.ID, d, st)
 		_ = s.SetTrackerEntry(ctx, tr.ID, d, &v)
 	}
-	_ = s.SetJournal(ctx, Today(), "good day")
+	_ = s.SetJournal(ctx, Today(), "good day", nil)
+	_ = s.SetJournalBad(ctx, Today(), "rain")
 	ins, err := s.InsightsRange(ctx, start, Today())
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +121,7 @@ func TestTrackersJournalAndInsights(t *testing.T) {
 	if len(ins.Correlations) != 1 || ins.Correlations[0].Delta == nil || *ins.Correlations[0].Delta != 2 {
 		t.Fatalf("correlation wrong: %+v", ins.Correlations)
 	}
-	if len(ins.Journal) != 1 || ins.Journal[0].Text != "good day" {
+	if len(ins.Journal) != 1 || ins.Journal[0].Text != "good day" || ins.Journal[0].Bad != "rain" {
 		t.Fatalf("journal wrong: %+v", ins.Journal)
 	}
 	d, err := s.DashboardStats(ctx)

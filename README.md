@@ -20,7 +20,7 @@ Most habit trackers fail because they become another habit you can't stick to. T
 - **Seven habits, two pens.** A month grid with the days across the top and your habits down the side. Click once for green (did it), twice for red (didn't). The aim is more greens than reds. Swap habits out at the end of a month when they stop being relevant.
 - **Sleep score and day rating out of five**, drawn as a line over three highlighter bands, so you can *see* how sleep and mood line up with what you did or didn't do.
 - **A weight row** (or steps, hours, anything with a number).
-- **One good thing per day.** A single line of gratitude journal next to the grid.
+- **One good thing per day.** A single line of gratitude journal next to the grid. Optionally one bad thing too (Settings → General).
 
 <p align="center"><img src="docs/screenshots/month.png" width="900" alt="Month page"></p>
 
@@ -31,8 +31,8 @@ Most habit trackers fail because they become another habit you can't stick to. T
 | **Month page** | The whole month on one screen: habit grid with weekday letters, weekends tinted, today highlighted, per-habit ✓/✗ counts and streaks. Scale trackers over green/yellow/pink bands, number trackers as an auto-scaled line. Arrow keys flip months. |
 | **Today check-in** | Big ✓ / ✗ buttons, 1–5 pills, a number field with the change since last time, the journal box. Mobile-first, installable as a PWA, bottom tab bar on phones. |
 | **Habits** | Scheduled days per habit (Mon/Wed/Fri runs don't count as missed on Tuesday), colours, ordering, start/end dates. *End* a habit and it stays on this month's page but is gone from the next. History is always kept. |
-| **Trackers** | Any 1–5 (or 0–10) score, or any measurement with a unit. "Higher is better" or "lower is better" decides which end gets the green band. |
-| **Insights** | Completion rate, current and best streak, rate per weekday, 7-day moving averages, and *what moves your scores*: average sleep score / day rating on days a habit was green vs red. |
+| **Trackers** | Any 1–5 (or 0–10) score, any measurement with a unit, or a yes/no question ("Headache?"). "Higher is better" or "lower is better" decides which end gets the green band. |
+| **Insights** | Completion rate, current and best streak, rate per weekday, 7-day moving averages, and *what moves your scores*: average sleep score / day rating on days a habit was green vs red, or a yes/no question was yes vs no. |
 | **Reminder** | One push a day at a time you choose, only if something is still unmarked. ntfy, Apprise or any JSON webhook. |
 | **Automation** | REST API with personal tokens, a single `POST /api/v1/checkin` for iOS Shortcuts / Home Assistant / n8n, `/api/v1/dashboard` for Homepage widgets, Prometheus `/metrics`, `/healthz` + `/readyz`. |
 | **Ops-friendly** | Single static binary, embedded SPA, SQLite with WAL, `VACUUM INTO` backups from the UI/CLI/API, JSON + CSV export, JSON import, proxy auth, non-root container, dark mode. |

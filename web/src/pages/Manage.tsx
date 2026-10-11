@@ -79,7 +79,7 @@ export default function Manage() {
                 <div className="order"><button className="btn ghost sm" disabled={i === 0} onClick={() => move(activeTrackers, t.id, -1, `${V1}/trackers/reorder`)} aria-label="Move up">↑</button><button className="btn ghost sm" disabled={i === activeTrackers.length - 1} onClick={() => move(activeTrackers, t.id, 1, `${V1}/trackers/reorder`)} aria-label="Move down">↓</button></div>
                 <button className="item" onClick={() => setEditTracker(t)}>
                   <span className="nm">{t.name}</span>
-                  <span className="muted small">{t.kind === 'scale' ? `scale ${t.min_value}–${t.max_value}` : `number${t.unit ? ' · ' + t.unit : ''}`}{t.higher_is_better ? '' : ' · lower is better'}</span>
+                  <span className="muted small">{t.kind === 'scale' ? `scale ${t.min_value}–${t.max_value}` : t.kind === 'yesno' ? 'yes / no' : `number${t.unit ? ' · ' + t.unit : ''}`}{t.kind === 'yesno' ? (t.higher_is_better ? ' · yes is good' : ' · yes is bad') : t.higher_is_better ? '' : ' · lower is better'}</span>
                 </button>
                 <div className="row">
                   <button className="btn ghost sm" title="Take it off next month's page" onClick={() => setConfirm({ title: `Stop tracking “${t.name}”?`, message: 'It stays on this month’s page and disappears from next month. History is kept.', run: () => run(() => api.post(`${V1}/trackers/${t.id}/end`, {}), 'Tracker ends this month') })}>End</button>
@@ -175,7 +175,7 @@ function TrackerModal({ tracker, onClose, onSaved, onDelete }: { tracker: Partia
       <form onSubmit={save} className="grid" style={{ gap: 14 }}>
         <Field label="Name"><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} required autoFocus placeholder="Sleep score, Day rating, Weight, Steps…" maxLength={60} /></Field>
         <Field label="Type">
-          <Segmented value={f.kind} onChange={k => setF(k === 'number' ? { ...f, kind: k, min_value: 0, max_value: 0, step: 0.1, higher_is_better: false } : { ...f, kind: k, min_value: 1, max_value: 5, step: 1, higher_is_better: true })} options={[{ value: 'scale', label: 'Score (e.g. 1–5)' }, { value: 'number', label: 'Measurement' }]} />
+          <Segmented value={f.kind} onChange={k => setF(k === 'number' ? { ...f, kind: k, min_value: 0, max_value: 0, step: 0.1, higher_is_better: false } : k === 'yesno' ? { ...f, kind: k, min_value: 0, max_value: 1, step: 1, unit: '', higher_is_better: false } : { ...f, kind: k, min_value: 1, max_value: 5, step: 1, higher_is_better: true })} options={[{ value: 'scale', label: 'Score (1–5)' }, { value: 'number', label: 'Measurement' }, { value: 'yesno', label: 'Yes / no' }]} />
         </Field>
         {f.kind === 'scale' ? (
           <div className="three-col tight">
@@ -183,14 +183,16 @@ function TrackerModal({ tracker, onClose, onSaved, onDelete }: { tracker: Partia
             <Field label="Max"><input type="number" step="any" value={f.max_value} onChange={e => setF({ ...f, max_value: Number(e.target.value) })} /></Field>
             <Field label="Step"><input type="number" step="any" min={0.1} value={f.step} onChange={e => setF({ ...f, step: Number(e.target.value) })} /></Field>
           </div>
+        ) : f.kind === 'yesno' ? (
+          <p className="muted small">A question you answer with yes or no each day — “Headache?”, “Slept well?”, “Rained?”. Not a habit: nothing is “missed”, it is just recorded. Insights compares your scores on yes-days and no-days.</p>
         ) : (
           <div className="two-col tight">
             <Field label="Unit"><input value={f.unit} onChange={e => setF({ ...f, unit: e.target.value })} placeholder="kg, steps, h, km" maxLength={12} /></Field>
             <Field label="Step"><input type="number" step="any" min={0.001} value={f.step} onChange={e => setF({ ...f, step: Number(e.target.value) })} /></Field>
           </div>
         )}
-        <Field label="Direction" help="Decides which end gets the green band and whether a drop counts as good.">
-          <Segmented value={f.higher_is_better ? 'up' : 'down'} onChange={v => setF({ ...f, higher_is_better: v === 'up' })} options={[{ value: 'up', label: 'Higher is better' }, { value: 'down', label: 'Lower is better' }]} />
+        <Field label="Direction" help={f.kind === 'yesno' ? 'Is “yes” the good answer? For “Headache?” it is not; for “Slept well?” it is.' : 'Decides which end gets the green band and whether a drop counts as good.'}>
+          <Segmented value={f.higher_is_better ? 'up' : 'down'} onChange={v => setF({ ...f, higher_is_better: v === 'up' })} options={f.kind === 'yesno' ? [{ value: 'up', label: 'Yes is good' }, { value: 'down', label: 'Yes is bad' }] : [{ value: 'up', label: 'Higher is better' }, { value: 'down', label: 'Lower is better' }]} />
         </Field>
         <div className="two-col tight">
           <Field label="Start date"><input type="date" value={f.start_date} onChange={e => setF({ ...f, start_date: e.target.value })} required /></Field>

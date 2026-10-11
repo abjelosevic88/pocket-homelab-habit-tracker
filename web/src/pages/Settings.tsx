@@ -45,6 +45,10 @@ function General() {
       <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
         <Field label="App title" help="Shown in the sidebar and browser tab."><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} /></Field>
         <Field label="Journal prompt"><input value={f.journal_prompt} onChange={e => setF({ ...f, journal_prompt: e.target.value })} maxLength={80} /></Field>
+        <Field label="Second line: one bad thing" help="Adds a second box on the Today page and a second column on the month page. Off by default — the notebook only asks for the good thing.">
+          <Segmented value={f.bad_thing_enabled ? 'on' : 'off'} onChange={v => setF({ ...f, bad_thing_enabled: v === 'on' })} options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'On' }]} />
+        </Field>
+        {f.bad_thing_enabled && <Field label="Bad-thing prompt"><input value={f.bad_prompt} onChange={e => setF({ ...f, bad_prompt: e.target.value })} maxLength={80} /></Field>}
         <Field label="Open on"><Segmented value={f.landing} onChange={v => setF({ ...f, landing: v })} options={[{ value: 'month', label: 'Month page' }, { value: 'today', label: 'Today check-in' }]} /></Field>
         <div><button className="btn primary" onClick={save} disabled={busy}>Save</button></div>
       </div>

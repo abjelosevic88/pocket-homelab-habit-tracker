@@ -36,7 +36,7 @@ type Habit struct {
 type Tracker struct {
 	ID             int64   `json:"id"`
 	Name           string  `json:"name"`
-	Kind           string  `json:"kind"` // scale | number
+	Kind           string  `json:"kind"` // scale | number | yesno
 	MinValue       float64 `json:"min_value"`
 	MaxValue       float64 `json:"max_value"`
 	Step           float64 `json:"step"`
@@ -50,14 +50,16 @@ type Tracker struct {
 
 // Settings are user-tunable preferences stored as key/value pairs.
 type Settings struct {
-	Title          string `json:"title"`
-	WeekStart      int    `json:"week_start"`      // 1 = Monday, 7 = Sunday
-	Landing        string `json:"landing"`         // month | today
-	JournalPrompt  string `json:"journal_prompt"`  // heading of the journal column
-	ReminderTime   string `json:"reminder_time"`   // HH:MM local, empty = off
-	ReminderURL    string `json:"reminder_url"`    // ntfy topic URL, Apprise endpoint or webhook
-	ReminderFormat string `json:"reminder_format"` // ntfy | apprise | json
-	ReminderLast   string `json:"-"`
-	SetupComplete  bool   `json:"setup_complete"`
-	DefaultsSeeded bool   `json:"-"`
+	Title           string `json:"title"`
+	WeekStart       int    `json:"week_start"`        // 1 = Monday, 7 = Sunday
+	Landing         string `json:"landing"`           // month | today
+	JournalPrompt   string `json:"journal_prompt"`    // heading of the journal column
+	BadThingEnabled bool   `json:"bad_thing_enabled"` // optional second line: one bad thing
+	BadPrompt       string `json:"bad_prompt"`
+	ReminderTime    string `json:"reminder_time"`   // HH:MM local, empty = off
+	ReminderURL     string `json:"reminder_url"`    // ntfy topic URL, Apprise endpoint or webhook
+	ReminderFormat  string `json:"reminder_format"` // ntfy | apprise | json
+	ReminderLast    string `json:"-"`
+	SetupComplete   bool   `json:"setup_complete"`
+	DefaultsSeeded  bool   `json:"-"`
 }

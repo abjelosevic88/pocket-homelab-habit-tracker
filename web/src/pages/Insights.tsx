@@ -13,6 +13,7 @@ export default function Insights() {
   if (!data) return null
   const scales = data.trackers.filter(t => t.kind === 'scale')
   const numbers = data.trackers.filter(t => t.kind === 'number')
+  const yesnos = data.trackers.filter(t => t.kind === 'yesno')
   const strong = data.correlations.filter(c => c.delta !== null && c.n_done >= 3 && c.n_missed >= 3)
 
   return (
@@ -44,12 +45,12 @@ export default function Insights() {
         <Card title="What moves your scores" className="mb">
           {strong.length === 0 ? <p className="muted">Needs at least three done and three missed days per habit alongside a score. Keep going.</p> : (
             <table className="table compact">
-              <thead><tr><th>Score</th><th>Habit</th><th className="right">done</th><th className="right">missed</th><th className="right">Δ</th></tr></thead>
+              <thead><tr><th>Score</th><th>Habit / question</th><th className="right">with</th><th className="right">without</th><th className="right">Δ</th></tr></thead>
               <tbody>
                 {strong.slice(0, 12).map(c => (
                   <tr key={`${c.tracker_id}-${c.habit_id}`}>
                     <td>{c.tracker_name}</td>
-                    <td>{c.habit_name}</td>
+                    <td>{c.habit_name}{c.kind === 'yesno' && <span className="muted small"> (yes vs no)</span>}</td>
                     <td className="right">{fmtNum(c.avg_done)} <span className="muted small">({c.n_done})</span></td>
                     <td className="right">{fmtNum(c.avg_missed)} <span className="muted small">({c.n_missed})</span></td>
                     <td className={`right ${(c.delta ?? 0) > 0 ? 'ok' : (c.delta ?? 0) < 0 ? 'bad' : ''}`}>{(c.delta ?? 0) > 0 ? '+' : ''}{fmtNum(c.delta)}</td>
@@ -58,23 +59,37 @@ export default function Insights() {
               </tbody>
             </table>
           )}
-          <p className="muted small mt">Average score on days the habit was green vs red. A positive Δ means better days when you did it. Correlation, not proof.</p>
+          <p className="muted small mt">Average score on days the habit was green vs red, or a yes/no question was yes vs no. A positive Δ means higher scores with it. Correlation, not proof.</p>
         </Card>
 
         <div>
           {scales.map(t => <Sparkline key={t.id} t={t} />)}
           {numbers.map(t => <Sparkline key={t.id} t={t} />)}
+          {yesnos.map(t => <YesNoStrip key={t.id} t={t} />)}
         </div>
       </div>
 
       {data.journal.length > 0 && (
         <Card title="Good things" actions={<span className="muted small">{data.journal.length} entries</span>}>
           <ul className="journal-read">
-            {data.journal.slice(0, 60).map(j => <li key={j.date}><span className="jdate">{shortDate(j.date)}</span><span>{j.text}</span></li>)}
+            {data.journal.slice(0, 60).map(j => <li key={j.date}><span className="jdate">{shortDate(j.date)}</span><span>{j.text && <span>{j.text}</span>}{j.bad && <span className="bad-line">{j.bad}</span>}</span></li>)}
           </ul>
         </Card>
       )}
     </>
+  )
+}
+
+function YesNoStrip({ t }: { t: TrackerInsight }) {
+  const yes = t.series.filter(p => p.value === 1).length
+  const yesTone = t.higher_is_better ? 'good' : 'bad', noTone = t.higher_is_better ? 'bad' : 'good'
+  return (
+    <Card title={t.name} className="mb" actions={<span className="small muted">{yes} yes of {t.series.length} days ({t.series.length ? Math.round(yes / t.series.length * 100) : 0}%)</span>}>
+      {t.series.length === 0 ? <p className="muted">No answers yet.</p> : (
+        <div className="yn-strip">{t.series.map(p => <span key={p.date} className={`yn ${p.value === 1 ? yesTone : noTone}`} title={`${shortDate(p.date)}: ${p.value === 1 ? 'yes' : 'no'}`} />)}</div>
+      )}
+      <div className="row" style={{ justifyContent: 'space-between' }}><span className="muted small">{t.series.length ? shortDate(t.series[0].date) : ''}</span><span className="muted small">one square per day · green = good answer</span><span className="muted small">{t.series.length ? shortDate(t.series[t.series.length - 1].date) : ''}</span></div>
+    </Card>
   )
 }
 

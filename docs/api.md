@@ -31,7 +31,8 @@ Create tokens under **Settings → API tokens**. Dates are `YYYY-MM-DD` in the s
 ```
 
 - `habits`: habit id → `1` done, `-1` missed, `0` clear.
-- `trackers`: tracker id → number, or `null` to clear.
+- `trackers`: tracker id → number, or `null` to clear. Yes/no trackers take `1` (yes) or `0` (no).
+- `journal_bad`: the optional "one bad thing" line (Settings → General).
 - Every key is optional; `date` defaults to today. Future dates are rejected. Returns the day payload.
 
 Get the ids from `GET /habits` and `GET /trackers`.
@@ -44,7 +45,7 @@ Get the ids from `GET /habits` and `GET /trackers`.
 | `DELETE` | `/habits/{id}/entries/{date}` | |
 | `PUT` | `/trackers/{id}/entries/{date}` | `{"value": 4.5}` or `{"value": null}` |
 | `DELETE` | `/trackers/{id}/entries/{date}` | |
-| `PUT` | `/journal/{date}` | `{"text": "…"}` (empty text deletes) |
+| `PUT` | `/journal/{date}` | `{"text": "…"}` and/or `{"bad": "…"}` (both empty deletes the day) |
 | `GET` | `/journal?from=&to=` | `{date: text}` |
 
 ## Habits & trackers
@@ -58,7 +59,7 @@ Get the ids from `GET /habits` and `GET /trackers`.
 | `POST` | `/habits/{id}/resume` | Clears the end date. |
 | `PUT` | `/habits/reorder` | `{"ids":[3,1,2]}` |
 
-Trackers mirror this under `/trackers`: `{"name","kind":"scale"|"number","min_value","max_value","step","unit","higher_is_better","start_date","end_date"}`.
+Trackers mirror this under `/trackers`: `{"name","kind":"scale"|"number"|"yesno","min_value","max_value","step","unit","higher_is_better","start_date","end_date"}`.
 
 ## Settings, data, health
 

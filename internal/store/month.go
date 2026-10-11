@@ -51,12 +51,13 @@ type MonthSummary struct {
 
 // MonthPage is everything the month view needs in one call.
 type MonthPage struct {
-	Month    string            `json:"month"`
-	Days     []Day             `json:"days"`
-	Habits   []MonthHabit      `json:"habits"`
-	Trackers []MonthTracker    `json:"trackers"`
-	Journal  map[string]string `json:"journal"`
-	Summary  MonthSummary      `json:"summary"`
+	Month      string            `json:"month"`
+	Days       []Day             `json:"days"`
+	Habits     []MonthHabit      `json:"habits"`
+	Trackers   []MonthTracker    `json:"trackers"`
+	Journal    map[string]string `json:"journal"`
+	JournalBad map[string]string `json:"journal_bad"`
+	Summary    MonthSummary      `json:"summary"`
 }
 
 var weekdayLetters = map[int]string{1: "M", 2: "T", 3: "W", 4: "T", 5: "F", 6: "S", 7: "S"}
@@ -103,11 +104,20 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 	if err != nil {
 		return nil, err
 	}
-	journal, err := s.Journal(ctx, from, to)
+	full, err := s.JournalFull(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
-	page := &MonthPage{Month: month, Days: days, Journal: journal, Habits: []MonthHabit{}, Trackers: []MonthTracker{}}
+	journal, bad := map[string]string{}, map[string]string{}
+	for d, e := range full {
+		if e.Text != "" {
+			journal[d] = e.Text
+		}
+		if e.Bad != "" {
+			bad[d] = e.Bad
+		}
+	}
+	page := &MonthPage{Month: month, Days: days, Journal: journal, JournalBad: bad, Habits: []MonthHabit{}, Trackers: []MonthTracker{}}
 	perfect := map[string]bool{}
 	for _, d := range days {
 		if !d.Future {
@@ -215,13 +225,14 @@ func (s *Store) streak(ctx context.Context, h Habit, today string) int {
 
 // TodayPage is the quick check-in payload.
 type TodayPage struct {
-	Date     string         `json:"date"`
-	Weekday  int            `json:"weekday"`
-	Habits   []TodayHabit   `json:"habits"`
-	Trackers []TodayTracker `json:"trackers"`
-	Journal  string         `json:"journal"`
-	Done     int            `json:"done"`
-	Total    int            `json:"total"`
+	Date       string         `json:"date"`
+	Weekday    int            `json:"weekday"`
+	Habits     []TodayHabit   `json:"habits"`
+	Trackers   []TodayTracker `json:"trackers"`
+	Journal    string         `json:"journal"`
+	JournalBad string         `json:"journal_bad"`
+	Done       int            `json:"done"`
+	Total      int            `json:"total"`
 }
 
 // TodayHabit is one habit's state for a day.
@@ -262,7 +273,7 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 	if err != nil {
 		return nil, err
 	}
-	journal, err := s.Journal(ctx, date, date)
+	journal, err := s.JournalFull(ctx, date, date)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +281,7 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 	if wd == 0 {
 		wd = 7
 	}
-	page := &TodayPage{Date: date, Weekday: wd, Journal: journal[date], Habits: []TodayHabit{}, Trackers: []TodayTracker{}}
+	page := &TodayPage{Date: date, Weekday: wd, Journal: journal[date].Text, JournalBad: journal[date].Bad, Habits: []TodayHabit{}, Trackers: []TodayTracker{}}
 	for _, h := range habits {
 		if !h.ActiveOn(date) {
 			continue
@@ -413,6 +424,7 @@ type HabitInsight struct {
 type Correlation struct {
 	TrackerID   int64    `json:"tracker_id"`
 	TrackerName string   `json:"tracker_name"`
+	Kind        string   `json:"kind"` // habit | yesno
 	HabitID     int64    `json:"habit_id"`
 	HabitName   string   `json:"habit_name"`
 	AvgDone     *float64 `json:"avg_done"`
@@ -455,6 +467,7 @@ type Insights struct {
 type JournalLine struct {
 	Date string `json:"date"`
 	Text string `json:"text"`
+	Bad  string `json:"bad,omitempty"`
 }
 
 // InsightsRange computes insights for an inclusive date range.
@@ -488,7 +501,7 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 	if err != nil {
 		return nil, err
 	}
-	journal, err := s.Journal(ctx, from, to)
+	journal, err := s.JournalFull(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -574,11 +587,37 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 		if t.Kind != "scale" {
 			continue
 		}
+		type split struct {
+			kind string
+			id   int64
+			name string
+			at   func(d string) int // 1 = with, -1 = without, 0 = unknown
+		}
+		var splits []split
 		for _, h := range habits {
-			c := Correlation{TrackerID: t.ID, TrackerName: t.Name, HabitID: h.ID, HabitName: h.Name}
+			id := h.ID
+			splits = append(splits, split{"habit", h.ID, h.Name, func(d string) int { return hEntries[id][d] }})
+		}
+		for _, yn := range trackers {
+			if yn.Kind != "yesno" {
+				continue
+			}
+			id := yn.ID
+			splits = append(splits, split{"yesno", yn.ID, yn.Name, func(d string) int {
+				if v, ok := tEntries[id][d]; ok {
+					if v == 1 {
+						return 1
+					}
+					return -1
+				}
+				return 0
+			}})
+		}
+		for _, sp := range splits {
+			c := Correlation{TrackerID: t.ID, TrackerName: t.Name, Kind: sp.kind, HabitID: sp.id, HabitName: sp.name}
 			var sd, sm float64
 			for d, v := range e {
-				switch hEntries[h.ID][d] {
+				switch sp.at(d) {
 				case 1:
 					sd += v
 					c.NDone++
@@ -620,7 +659,7 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(jd)))
 	for _, d := range jd {
-		out.Journal = append(out.Journal, JournalLine{Date: d, Text: journal[d]})
+		out.Journal = append(out.Journal, JournalLine{Date: d, Text: journal[d].Text, Bad: journal[d].Bad})
 	}
 	return out, nil
 }

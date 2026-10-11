@@ -63,6 +63,7 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		Habits   map[string]int      `json:"habits"`
 		Trackers map[string]*float64 `json:"trackers"`
 		Journal  *string             `json:"journal"`
+		Bad      *string             `json:"journal_bad"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -103,7 +104,12 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if in.Journal != nil {
-		if err := s.store.SetJournal(ctx, in.Date, *in.Journal); err != nil {
+		if err := s.store.SetJournal(ctx, in.Date, *in.Journal, in.Bad); err != nil {
+			s.fail(w, err, "set journal")
+			return
+		}
+	} else if in.Bad != nil {
+		if err := s.store.SetJournalBad(ctx, in.Date, *in.Bad); err != nil {
 			s.fail(w, err, "set journal")
 			return
 		}
@@ -181,19 +187,29 @@ func (s *Server) handleSetJournal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Text string `json:"text"`
+		Text *string `json:"text"`
+		Bad  *string `json:"bad"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	if len(in.Text) > 4000 {
+	if (in.Text != nil && len(*in.Text) > 4000) || (in.Bad != nil && len(*in.Bad) > 4000) {
 		writeErr(w, http.StatusBadRequest, "keep it under 4000 characters")
 		return
 	}
-	if err := s.store.SetJournal(r.Context(), date, in.Text); err != nil {
+	ctx := r.Context()
+	var err error
+	switch {
+	case in.Text != nil:
+		err = s.store.SetJournal(ctx, date, *in.Text, in.Bad)
+	case in.Bad != nil:
+		err = s.store.SetJournalBad(ctx, date, *in.Bad)
+	}
+	if err != nil {
 		s.fail(w, err, "set journal")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"date": date, "text": in.Text})
+	full, _ := s.store.JournalFull(ctx, date, date)
+	writeJSON(w, http.StatusOK, map[string]string{"date": date, "text": full[date].Text, "bad": full[date].Bad})
 }

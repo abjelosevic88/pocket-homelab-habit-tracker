@@ -67,38 +67,49 @@ export default function Month() {
         )}
       </Card>
 
-      <Journal page={data} prompt={settings?.journal_prompt || 'What was great about today?'} onSaved={(date, text) => setData(d => d && { ...d, journal: { ...d.journal, [date]: text }, summary: { ...d.summary, journal_days: Object.values({ ...d.journal, [date]: text }).filter(Boolean).length } })} />
+      <Journal page={data} prompt={settings?.journal_prompt || 'What was great about today?'} badPrompt={settings?.bad_thing_enabled ? (settings.bad_prompt || 'And one thing that was bad?') : null}
+        onSaved={(date, text) => setData(d => d && { ...d, journal: { ...d.journal, [date]: text }, summary: { ...d.summary, journal_days: Object.values({ ...d.journal, [date]: text }).filter(Boolean).length } })}
+        onSavedBad={(date, text) => setData(d => d && { ...d, journal_bad: { ...d.journal_bad, [date]: text } })} />
     </>
   )
 }
 
-function Journal({ page, prompt, onSaved }: { page: MonthPage; prompt: string; onSaved: (date: string, text: string) => void }) {
+function Journal({ page, prompt, badPrompt, onSaved, onSavedBad }: { page: MonthPage; prompt: string; badPrompt: string | null; onSaved: (date: string, text: string) => void; onSavedBad: (date: string, text: string) => void }) {
   const days = page.days.filter(d => !d.future)
   return (
-    <Card title={prompt} actions={<span className="muted small">{page.summary.journal_days} of {days.length} days</span>}>
-      <div className="journal">
-        {days.slice().reverse().map(d => <JournalLine key={d.date} date={d.date} today={d.today} text={page.journal[d.date] || ''} onSaved={onSaved} />)}
+    <Card title={badPrompt ? <span className="row wrap"><span>{prompt}</span><span className="muted">·</span><span className="bad-prompt">{badPrompt}</span></span> : prompt} actions={<span className="muted small">{page.summary.journal_days} of {days.length} days</span>}>
+      <div className={`journal ${badPrompt ? 'two' : ''}`}>
+        {days.slice().reverse().map(d => <JournalLine key={d.date} date={d.date} today={d.today} text={page.journal[d.date] || ''} bad={badPrompt ? (page.journal_bad[d.date] || '') : null} onSaved={onSaved} onSavedBad={onSavedBad} />)}
       </div>
     </Card>
   )
 }
 
-function JournalLine({ date, text, today, onSaved }: { date: string; text: string; today: boolean; onSaved: (date: string, text: string) => void }) {
-  const [v, setV] = useState(text)
+function JournalLine({ date, text, bad, today, onSaved, onSavedBad }: { date: string; text: string; bad: string | null; today: boolean; onSaved: (date: string, text: string) => void; onSavedBad: (date: string, text: string) => void }) {
+  return (
+    <div className={`journal-line ${today ? 'today' : ''} ${text || bad ? 'filled' : ''}`}>
+      <span className="jdate">{shortDate(date)}</span>
+      <JournalInput date={date} field="text" value={text} placeholder={today ? 'One good thing from today…' : ''} onSaved={onSaved} />
+      {bad !== null && <JournalInput date={date} field="bad" value={bad} placeholder={today ? 'One bad thing…' : ''} onSaved={onSavedBad} />}
+    </div>
+  )
+}
+
+function JournalInput({ date, field, value, placeholder, onSaved }: { date: string; field: 'text' | 'bad'; value: string; placeholder: string; onSaved: (date: string, text: string) => void }) {
+  const [v, setV] = useState(value)
   const [saving, setSaving] = useState(false)
-  const last = useRef(text)
+  const last = useRef(value)
   const { toast } = useToast()
-  useEffect(() => { setV(text); last.current = text }, [text])
+  useEffect(() => { setV(value); last.current = value }, [value])
   const save = async () => {
     if (v === last.current) return
     setSaving(true)
-    try { await api.put(`${V1}/journal/${date}`, { text: v }); last.current = v; onSaved(date, v) } catch (e) { toast((e as Error).message, 'err') } finally { setSaving(false) }
+    try { await api.put(`${V1}/journal/${date}`, { [field]: v }); last.current = v; onSaved(date, v) } catch (e) { toast((e as Error).message, 'err') } finally { setSaving(false) }
   }
   return (
-    <div className={`journal-line ${today ? 'today' : ''} ${v ? 'filled' : ''}`}>
-      <span className="jdate">{shortDate(date)}</span>
-      <input value={v} onChange={e => setV(e.target.value)} onBlur={save} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} placeholder={today ? 'One good thing from today…' : ''} maxLength={4000} />
+    <span className={`jfield ${field}`}>
+      <input value={v} onChange={e => setV(e.target.value)} onBlur={save} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} placeholder={placeholder} maxLength={4000} />
       {saving && <span className="spinner sm" />}
-    </div>
+    </span>
   )
 }

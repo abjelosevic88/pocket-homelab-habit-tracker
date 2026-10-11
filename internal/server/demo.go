@@ -42,6 +42,10 @@ func (s *Server) seedDemo(ctx context.Context) error {
 		}
 		habits = append(habits, h)
 	}
+	headache := store.Tracker{Name: "Headache", Kind: "yesno", MinValue: 0, MaxValue: 1, Step: 1, HigherIsBetter: false, StartDate: sd}
+	if err := s.store.CreateTracker(ctx, &headache); err != nil {
+		return err
+	}
 	trackers, err := s.store.ListTrackers(ctx, "", true)
 	if err != nil {
 		return err
@@ -83,6 +87,12 @@ func (s *Server) seedDemo(ctx context.Context) error {
 			case "scale":
 				v := math.Round(clamp(base+rng.NormFloat64()*0.5, t.MinValue, t.MaxValue))
 				_ = s.store.SetTrackerEntry(ctx, t.ID, ds, &v)
+			case "yesno":
+				v := 0.0
+				if base < 3 && rng.Float64() < 0.6 || rng.Float64() < 0.12 {
+					v = 1
+				}
+				_ = s.store.SetTrackerEntry(ctx, t.ID, ds, &v)
 			default:
 				if rng.Float64() < 0.8 {
 					weight += rng.NormFloat64()*0.25 - 0.03
@@ -92,7 +102,7 @@ func (s *Server) seedDemo(ctx context.Context) error {
 			}
 		}
 		if rng.Float64() < 0.85 {
-			_ = s.store.SetJournal(ctx, ds, lines[rng.Intn(len(lines))])
+			_ = s.store.SetJournal(ctx, ds, lines[rng.Intn(len(lines))], nil)
 		}
 	}
 	s.log.Info("demo data seeded")

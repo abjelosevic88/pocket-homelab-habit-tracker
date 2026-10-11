@@ -67,8 +67,14 @@ export default function Today() {
       )}
 
       <Card title={settings?.journal_prompt || 'What was great about today?'} flush className="section">
-        <JournalBox date={date} text={data.journal} onSaved={t => setData(d => d && { ...d, journal: t })} />
+        <JournalBox date={date} field="text" text={data.journal} onSaved={t => setData(d => d && { ...d, journal: t })} placeholder="One thing that happened today that was great." />
       </Card>
+
+      {settings?.bad_thing_enabled && (
+        <Card title={settings.bad_prompt || 'And one thing that was bad?'} flush className="section bad">
+          <JournalBox date={date} field="bad" text={data.journal_bad} onSaved={t => setData(d => d && { ...d, journal_bad: t })} placeholder="One thing that was bad — name it and let it go." />
+        </Card>
+      )}
     </div>
   )
 }
@@ -92,6 +98,19 @@ function HabitRow({ h, onSet, dim }: { h: TodayHabit; onSet: (h: TodayHabit, s: 
 function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v: number | null) => void }) {
   const [draft, setDraft] = useState(t.value !== null ? String(t.value) : '')
   useEffect(() => { setDraft(t.value !== null ? String(t.value) : '') }, [t.value])
+  if (t.kind === 'yesno') {
+    // "yes" is good only when higher is better (e.g. "Slept well?"); for "Headache?" it is bad.
+    const yesTone = t.higher_is_better ? 'good' : 'bad', noTone = t.higher_is_better ? 'bad' : 'good'
+    return (
+      <li className={`checkin yesno-row ${t.value === 1 ? `is-${yesTone}` : t.value === 0 ? `is-${noTone}` : ''}`}>
+        <div className="ci-name"><span>{t.name}</span>{t.previous !== null && <span className="muted small">yesterday {t.previous === 1 ? 'yes' : 'no'}</span>}</div>
+        <div className={`ci-actions ${t.value !== null ? 'has-choice' : ''}`}>
+          <button className={`mark yn ${yesTone} ${t.value === 1 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 1 ? null : 1)} aria-pressed={t.value === 1}>Yes</button>
+          <button className={`mark yn ${noTone} ${t.value === 0 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 0 ? null : 0)} aria-pressed={t.value === 0}>No</button>
+        </div>
+      </li>
+    )
+  }
   if (t.kind === 'scale') {
     const steps: number[] = []
     for (let v = t.min_value; v <= t.max_value + 1e-9; v += t.step) steps.push(Number(v.toFixed(4)))
@@ -124,7 +143,7 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
   )
 }
 
-function JournalBox({ date, text, onSaved }: { date: string; text: string; onSaved: (t: string) => void }) {
+function JournalBox({ date, text, field, placeholder, onSaved }: { date: string; text: string; field: 'text' | 'bad'; placeholder: string; onSaved: (t: string) => void }) {
   const [v, setV] = useState(text)
   const last = useRef(text)
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -133,11 +152,11 @@ function JournalBox({ date, text, onSaved }: { date: string; text: string; onSav
   const save = async () => {
     if (v === last.current) return
     setState('saving')
-    try { await api.put(`${V1}/journal/${date}`, { text: v }); last.current = v; onSaved(v); setState('saved'); setTimeout(() => setState('idle'), 1500) } catch (e) { toast((e as Error).message, 'err'); setState('idle') }
+    try { await api.put(`${V1}/journal/${date}`, { [field]: v }); last.current = v; onSaved(v); setState('saved'); setTimeout(() => setState('idle'), 1500) } catch (e) { toast((e as Error).message, 'err'); setState('idle') }
   }
   return (
     <div className="journal-box">
-      <textarea rows={3} value={v} onChange={e => setV(e.target.value)} onBlur={save} placeholder="One thing that happened today that was great." maxLength={4000} />
+      <textarea rows={3} value={v} onChange={e => setV(e.target.value)} onBlur={save} placeholder={placeholder} maxLength={4000} />
       <div className="journal-foot">
         <span className="muted small">{state === 'saving' ? 'Saving…' : state === 'saved' ? '✓ Saved' : v === last.current && v ? '✓ Saved' : 'Saves when you click away'}</span>
         <button className="btn sm primary" onClick={save} disabled={v === last.current}>Save</button>
