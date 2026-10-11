@@ -62,7 +62,7 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
 
   if (isYesNo) {
     const yes = pts.filter(p => p.v === 1).length
-    const YH = 40
+    const YH = 52
     const yesTone = tracker.higher_is_better ? 'good' : 'bad', noTone = tracker.higher_is_better ? 'bad' : 'good'
     return (
       <div className="tracker-row yesno">
@@ -77,7 +77,7 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
               const v = tracker.entries[d.date]
               const dflt = tracker.defaulted?.[d.date]
               const cls = `${v === 1 ? `yn-dot ${yesTone}` : v === 0 ? `yn-dot ${noTone} no` : 'yn-dot empty'} ${dflt ? 'implicit' : ''}`
-              return <circle key={d.date} className={cls} cx={x(i)} cy={YH / 2} r={v === undefined ? 3 : dflt ? 5 : 7}><title>{`${shortDate(d.date)}: ${v === 1 ? 'yes' : v === 0 ? 'no' : d.future ? '' : 'not marked — click to cycle'}${dflt ? ' (by default)' : ''}`}</title></circle>
+              return <circle key={d.date} className={cls} cx={x(i)} cy={YH / 2} r={v === undefined ? 3 : dflt ? 6 : 7}><title>{`${shortDate(d.date)}: ${v === 1 ? 'yes' : v === 0 ? 'no' : d.future ? '' : 'not marked — click to cycle'}${dflt ? ' (by default)' : ''}`}</title></circle>
             })}
             {days.map((d, i) => <rect key={d.date + 'h'} className={`hit ${d.future ? 'future' : ''}`} x={NAME + i * COL} y={0} width={COL} height={YH} onClick={() => open(d)} />)}
             <foreignObject x={NAME + days.length * COL} y={0} width={SUM} height={YH}>
