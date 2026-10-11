@@ -7,7 +7,7 @@
   <b>One binary · one SQLite file · one volume.</b> No Postgres, no Redis, no gamification.
 </p>
 <p align="center">
-  <a href="https://github.com/abjelosevic88/pocket-homelab-habit-tracker/actions"><img src="https://img.shields.io/github/actions/workflow/status/abjelosevic88/pocket-homelab-habit-tracker/ci.yml?branch=main&label=CI" alt="CI"></a>
+  <a href="https://github.com/abjelosevic88/pocket-homelab-habit-tracker/actions"><img src="https://github.com/abjelosevic88/pocket-homelab-habit-tracker/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/abjelosevic88/pocket-homelab-habit-tracker/pkgs/container/pocket-homelab-habit-tracker"><img src="https://img.shields.io/badge/ghcr.io-amd64%20%7C%20arm64%20%7C%20armv7-blue" alt="image"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
   <img src="https://img.shields.io/badge/image%20size-~15MB-lightgrey" alt="size">
