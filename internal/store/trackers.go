@@ -5,12 +5,12 @@ import (
 	"strings"
 )
 
-const trackerCols = `id, name, kind, min_value, max_value, step, unit, higher_is_better, sort_order, start_date, end_date, created_at`
+const trackerCols = `id, name, kind, min_value, max_value, step, unit, higher_is_better, sort_order, start_date, end_date, default_value, created_at`
 
 func scanTracker(row interface{ Scan(...any) error }) (*Tracker, error) {
 	var t Tracker
 	var hib int
-	if err := row.Scan(&t.ID, &t.Name, &t.Kind, &t.MinValue, &t.MaxValue, &t.Step, &t.Unit, &hib, &t.SortOrder, &t.StartDate, &t.EndDate, &t.CreatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Name, &t.Kind, &t.MinValue, &t.MaxValue, &t.Step, &t.Unit, &hib, &t.SortOrder, &t.StartDate, &t.EndDate, &t.DefaultValue, &t.CreatedAt); err != nil {
 		return nil, notFound(err)
 	}
 	t.HigherIsBetter = hib == 1
@@ -69,8 +69,8 @@ func (s *Store) CreateTracker(ctx context.Context, t *Tracker) error {
 	var max int
 	_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(MAX(sort_order), 0) FROM trackers`).Scan(&max)
 	t.SortOrder = max + 1
-	res, err := s.DB.ExecContext(ctx, `INSERT INTO trackers (name, kind, min_value, max_value, step, unit, higher_is_better, sort_order, start_date, end_date)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, t.Name, t.Kind, t.MinValue, t.MaxValue, t.Step, t.Unit, boolInt(t.HigherIsBetter), t.SortOrder, t.StartDate, t.EndDate)
+	res, err := s.DB.ExecContext(ctx, `INSERT INTO trackers (name, kind, min_value, max_value, step, unit, higher_is_better, sort_order, start_date, end_date, default_value)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, t.Name, t.Kind, t.MinValue, t.MaxValue, t.Step, t.Unit, boolInt(t.HigherIsBetter), t.SortOrder, t.StartDate, t.EndDate, t.DefaultValue)
 	if err != nil {
 		return err
 	}
@@ -81,8 +81,8 @@ func (s *Store) CreateTracker(ctx context.Context, t *Tracker) error {
 
 // UpdateTracker saves a tracker.
 func (s *Store) UpdateTracker(ctx context.Context, t *Tracker) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE trackers SET name = ?, kind = ?, min_value = ?, max_value = ?, step = ?, unit = ?, higher_is_better = ?, sort_order = ?, start_date = ?, end_date = ?, updated_at = ? WHERE id = ?`,
-		t.Name, t.Kind, t.MinValue, t.MaxValue, t.Step, t.Unit, boolInt(t.HigherIsBetter), t.SortOrder, t.StartDate, t.EndDate, Now(), t.ID)
+	_, err := s.DB.ExecContext(ctx, `UPDATE trackers SET name = ?, kind = ?, min_value = ?, max_value = ?, step = ?, unit = ?, higher_is_better = ?, sort_order = ?, start_date = ?, end_date = ?, default_value = ?, updated_at = ? WHERE id = ?`,
+		t.Name, t.Kind, t.MinValue, t.MaxValue, t.Step, t.Unit, boolInt(t.HigherIsBetter), t.SortOrder, t.StartDate, t.EndDate, t.DefaultValue, Now(), t.ID)
 	return err
 }
 
@@ -119,6 +119,48 @@ func (s *Store) SetTrackerEntry(ctx context.Context, trackerID int64, date strin
 	_, err := s.DB.ExecContext(ctx, `INSERT INTO tracker_entries (tracker_id, date, value, updated_at) VALUES (?, ?, ?, ?)
 		ON CONFLICT(tracker_id, date) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, trackerID, date, *value, Now())
 	return err
+}
+
+// FillDefaults adds each tracker's default value to every active day in
+// [from, to] up to today that has no entry, and reports which days it filled.
+// Future days are left empty: a default is "what happened unless you said
+// otherwise", not a prediction.
+func FillDefaults(trackers []Tracker, entries map[int64]map[string]float64, from, to, today string) map[int64]map[string]bool {
+	filled := map[int64]map[string]bool{}
+	start, err := ParseDate(from)
+	if err != nil {
+		return filled
+	}
+	end, err := ParseDate(to)
+	if err != nil {
+		return filled
+	}
+	if to > today {
+		end, _ = ParseDate(today)
+	}
+	for _, t := range trackers {
+		if t.DefaultValue == nil {
+			continue
+		}
+		if entries[t.ID] == nil {
+			entries[t.ID] = map[string]float64{}
+		}
+		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+			ds := d.Format("2006-01-02")
+			if !t.ActiveOn(ds) {
+				continue
+			}
+			if _, ok := entries[t.ID][ds]; ok {
+				continue
+			}
+			entries[t.ID][ds] = *t.DefaultValue
+			if filled[t.ID] == nil {
+				filled[t.ID] = map[string]bool{}
+			}
+			filled[t.ID][ds] = true
+		}
+	}
+	return filled
 }
 
 // TrackerEntries returns values by tracker id and date for a date range.

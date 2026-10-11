@@ -140,3 +140,48 @@ func TestTrackersJournalAndInsights(t *testing.T) {
 		t.Fatal("backup empty")
 	}
 }
+
+func TestTrackerDefaultFillsPastDaysOnly(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	today := Today()
+	tt, _ := ParseDate(today)
+	start := tt.AddDate(0, 0, -3).Format("2006-01-02")
+	no := 0.0
+	tr := &Tracker{Name: "Stomach?", Kind: "yesno", MinValue: 0, MaxValue: 1, Step: 1, StartDate: start, DefaultValue: &no}
+	if err := s.CreateTracker(ctx, tr); err != nil {
+		t.Fatal(err)
+	}
+	yes := 1.0
+	yesterday := tt.AddDate(0, 0, -1).Format("2006-01-02")
+	if err := s.SetTrackerEntry(ctx, tr.ID, yesterday, &yes); err != nil {
+		t.Fatal(err)
+	}
+	from, to := tt.AddDate(0, 0, -5).Format("2006-01-02"), tt.AddDate(0, 0, 2).Format("2006-01-02")
+	entries, _ := s.TrackerEntries(ctx, from, to)
+	filled := FillDefaults([]Tracker{*tr}, entries, from, to, today)
+	e := entries[tr.ID]
+	if len(e) != 4 { // start..today = 4 days; before start and future are untouched
+		t.Fatalf("expected 4 values, got %d: %v", len(e), e)
+	}
+	if e[yesterday] != 1 || filled[tr.ID][yesterday] {
+		t.Fatalf("explicit entry must win: %v %v", e[yesterday], filled[tr.ID][yesterday])
+	}
+	if e[today] != 0 || !filled[tr.ID][today] {
+		t.Fatalf("today should be defaulted to no: %v %v", e[today], filled[tr.ID])
+	}
+	if _, ok := e[tt.AddDate(0, 0, 1).Format("2006-01-02")]; ok {
+		t.Fatal("future days must not be filled")
+	}
+	got, _ := s.GetTracker(ctx, tr.ID)
+	if got.DefaultValue == nil || *got.DefaultValue != 0 {
+		t.Fatalf("default not persisted: %v", got.DefaultValue)
+	}
+	day, err := s.Day(ctx, today)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(day.Trackers) == 0 || day.Trackers[len(day.Trackers)-1].Value == nil || !day.Trackers[len(day.Trackers)-1].Defaulted {
+		t.Fatalf("Day() should expose the defaulted value: %+v", day.Trackers)
+	}
+}

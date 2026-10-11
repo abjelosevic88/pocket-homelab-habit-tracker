@@ -49,18 +49,19 @@ export interface Tracker {
   sort_order: number
   start_date: string
   end_date: string | null
+  default_value: number | null
   created_at: string
 }
 
 export interface Day { date: string; day: number; weekday: number; label: string; weekend: boolean; today: boolean; future: boolean }
 
 export interface MonthHabit extends Habit { entries: Record<string, number>; done: number; missed: number; scheduled: number; streak: number }
-export interface MonthTracker extends Tracker { entries: Record<string, number>; avg: number | null; min: number | null; max: number | null; first: number | null; last: number | null }
+export interface MonthTracker extends Tracker { entries: Record<string, number>; defaulted: Record<string, boolean>; avg: number | null; min: number | null; max: number | null; first: number | null; last: number | null }
 export interface MonthSummary { done: number; missed: number; unmarked: number; rate: number | null; perfect_days: number; journal_days: number }
 export interface MonthPage { month: string; days: Day[]; habits: MonthHabit[]; trackers: MonthTracker[]; journal: Record<string, string>; journal_bad: Record<string, string>; summary: MonthSummary; weather?: Record<string, WeatherDay> | null }
 
 export interface TodayHabit extends Habit { status: number; scheduled: boolean; streak: number }
-export interface TodayTracker extends Tracker { value: number | null; previous: number | null }
+export interface TodayTracker extends Tracker { value: number | null; previous: number | null; defaulted: boolean }
 export interface TodayPage { date: string; weekday: number; habits: TodayHabit[]; trackers: TodayTracker[]; journal: string; journal_bad: string; done: number; total: number; weather?: WeatherDay | null }
 
 export interface Dashboard {

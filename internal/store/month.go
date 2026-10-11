@@ -31,12 +31,13 @@ type MonthHabit struct {
 // MonthTracker is a tracker row with its values and summary.
 type MonthTracker struct {
 	Tracker
-	Entries map[string]float64 `json:"entries"`
-	Avg     *float64           `json:"avg"`
-	Min     *float64           `json:"min"`
-	Max     *float64           `json:"max"`
-	First   *float64           `json:"first"`
-	Last    *float64           `json:"last"`
+	Entries   map[string]float64 `json:"entries"`
+	Defaulted map[string]bool    `json:"defaulted"` // days whose value is the tracker's default, not an entry
+	Avg       *float64           `json:"avg"`
+	Min       *float64           `json:"min"`
+	Max       *float64           `json:"max"`
+	First     *float64           `json:"first"`
+	Last      *float64           `json:"last"`
 }
 
 // MonthSummary totals a month.
@@ -106,6 +107,7 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 	if err != nil {
 		return nil, err
 	}
+	tDefaulted := FillDefaults(trackers, tEntries, from, to, today)
 	full, err := s.JournalFull(ctx, from, to)
 	if err != nil {
 		return nil, err
@@ -171,9 +173,12 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 	}
 	page.Summary.JournalDays = len(journal)
 	for _, t := range trackers {
-		mt := MonthTracker{Tracker: t, Entries: tEntries[t.ID]}
+		mt := MonthTracker{Tracker: t, Entries: tEntries[t.ID], Defaulted: tDefaulted[t.ID]}
 		if mt.Entries == nil {
 			mt.Entries = map[string]float64{}
+		}
+		if mt.Defaulted == nil {
+			mt.Defaulted = map[string]bool{}
 		}
 		var dates []string
 		for d := range mt.Entries {
@@ -254,8 +259,9 @@ type TodayHabit struct {
 // TodayTracker is one tracker's value for a day.
 type TodayTracker struct {
 	Tracker
-	Value    *float64 `json:"value"`
-	Previous *float64 `json:"previous"` // most recent earlier value, for number trackers
+	Value     *float64 `json:"value"`
+	Previous  *float64 `json:"previous"`  // most recent earlier value, for number trackers
+	Defaulted bool     `json:"defaulted"` // Value is the tracker's default, nothing was recorded
 }
 
 // Day assembles the check-in page for one date.
@@ -281,6 +287,7 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 	if err != nil {
 		return nil, err
 	}
+	tDefaulted := FillDefaults(trackers, tEntries, date, date, Today())
 	journal, err := s.JournalFull(ctx, date, date)
 	if err != nil {
 		return nil, err
@@ -310,13 +317,16 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 		if !tr.ActiveOn(date) {
 			continue
 		}
-		tt := TodayTracker{Tracker: tr}
+		tt := TodayTracker{Tracker: tr, Defaulted: tDefaulted[tr.ID][date]}
 		if v, ok := tEntries[tr.ID][date]; ok {
 			tt.Value = &v
 		}
 		var prev float64
 		if err := s.DB.QueryRowContext(ctx, `SELECT value FROM tracker_entries WHERE tracker_id = ? AND date < ? ORDER BY date DESC LIMIT 1`, tr.ID, date).Scan(&prev); err == nil {
 			tt.Previous = &prev
+		} else if tr.DefaultValue != nil && tr.StartDate < date {
+			d := *tr.DefaultValue
+			tt.Previous = &d
 		}
 		page.Trackers = append(page.Trackers, tt)
 	}
@@ -517,6 +527,7 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 	if err != nil {
 		return nil, err
 	}
+	FillDefaults(trackers, tEntries, from, to, today)
 	journal, err := s.JournalFull(ctx, from, to)
 	if err != nil {
 		return nil, err

@@ -104,8 +104,8 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
     // "yes" is good only when higher is better (e.g. "Slept well?"); for "Headache?" it is bad.
     const yesTone = t.higher_is_better ? 'good' : 'bad', noTone = t.higher_is_better ? 'bad' : 'good'
     return (
-      <li className={`checkin yesno-row ${t.value === 1 ? `is-${yesTone}` : t.value === 0 ? `is-${noTone}` : ''}`}>
-        <div className="ci-name"><span>{t.name}</span>{t.previous !== null && <span className="muted small">yesterday {t.previous === 1 ? 'yes' : 'no'}</span>}</div>
+      <li className={`checkin yesno-row ${t.value === 1 ? `is-${yesTone}` : t.value === 0 ? `is-${noTone}` : ''} ${t.defaulted ? 'is-default' : ''}`}>
+        <div className="ci-name"><span>{t.name}</span><span className="muted small">{t.defaulted ? `${t.value === 1 ? 'yes' : 'no'} by default` : t.previous !== null ? `yesterday ${t.previous === 1 ? 'yes' : 'no'}` : ''}</span></div>
         <div className={`ci-actions ${t.value !== null ? 'has-choice' : ''}`}>
           <button className={`mark yn ${yesTone} ${t.value === 1 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 1 ? null : 1)} aria-pressed={t.value === 1}>Yes</button>
           <button className={`mark yn ${noTone} ${t.value === 0 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 0 ? null : 0)} aria-pressed={t.value === 0}>No</button>
@@ -117,8 +117,8 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
     const steps: number[] = []
     for (let v = t.min_value; v <= t.max_value + 1e-9; v += t.step) steps.push(Number(v.toFixed(4)))
     return (
-      <li className={`checkin scale-row ${t.value !== null ? 'has-value' : ''}`}>
-        <div className="ci-name"><span>{t.name}</span><span className="muted small">{t.value !== null ? `${fmtNum(t.value)} of ${fmtNum(t.max_value)}` : `${fmtNum(t.min_value)}–${fmtNum(t.max_value)}`}{!t.higher_is_better ? ' · lower is better' : ''}</span></div>
+      <li className={`checkin scale-row ${t.value !== null ? 'has-value' : ''} ${t.defaulted ? 'is-default' : ''}`}>
+        <div className="ci-name"><span>{t.name}</span><span className="muted small">{t.value !== null ? `${fmtNum(t.value)} of ${fmtNum(t.max_value)}${t.defaulted ? ' by default' : ''}` : `${fmtNum(t.min_value)}–${fmtNum(t.max_value)}`}{!t.higher_is_better ? ' · lower is better' : ''}</span></div>
         <div className="scale" role="radiogroup" aria-label={t.name}>
           {steps.map(s => <button key={s} role="radio" aria-checked={t.value === s} className={`pill ${bandFor(s, t.min_value, t.max_value, t.higher_is_better)} ${t.value === s ? 'active' : ''}`} onClick={() => onSet(t, t.value === s ? null : s)}>{fmtNum(s)}</button>)}
         </div>

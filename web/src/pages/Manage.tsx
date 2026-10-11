@@ -109,6 +109,13 @@ export default function Manage() {
   )
 }
 
+function scaleSteps(min: number, max: number, step: number): number[] {
+  const out: number[] = []
+  if (!(step > 0) || !(max > min)) return out
+  for (let v = min; v <= max + 1e-9 && out.length < 40; v += step) out.push(Number(v.toFixed(4)))
+  return out
+}
+
 function daysLabel(days: string): string {
   if (days === '1234567') return 'every day'
   if (days === '12345') return 'weekdays'
@@ -160,12 +167,12 @@ function HabitModal({ habit, onClose, onSaved, onDelete }: { habit: Partial<Habi
 
 function TrackerModal({ tracker, onClose, onSaved, onDelete }: { tracker: Partial<Tracker>; onClose: () => void; onSaved: () => void; onDelete: (t: Tracker) => void }) {
   const { toast } = useToast()
-  const [f, setF] = useState({ name: tracker.name || '', kind: tracker.kind || 'scale', min_value: tracker.min_value ?? 1, max_value: tracker.max_value ?? 5, step: tracker.step ?? 1, unit: tracker.unit || '', higher_is_better: tracker.higher_is_better ?? true, start_date: tracker.start_date || todayISO(), end_date: tracker.end_date || '' })
+  const [f, setF] = useState({ name: tracker.name || '', kind: tracker.kind || 'scale', min_value: tracker.min_value ?? 1, max_value: tracker.max_value ?? 5, step: tracker.step ?? 1, unit: tracker.unit || '', higher_is_better: tracker.higher_is_better ?? true, start_date: tracker.start_date || todayISO(), end_date: tracker.end_date || '', default_value: tracker.default_value ?? null as number | null })
   const [busy, setBusy] = useState(false)
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true)
     try {
-      const body = { ...f, min_value: Number(f.min_value), max_value: Number(f.max_value), step: Number(f.step), end_date: f.end_date || null }
+      const body = { ...f, min_value: Number(f.min_value), max_value: Number(f.max_value), step: Number(f.step), end_date: f.end_date || null, default_value: f.default_value === null || Number.isNaN(Number(f.default_value)) ? null : Number(f.default_value) }
       if (tracker.id) await api.put(`${V1}/trackers/${tracker.id}`, body); else await api.post(`${V1}/trackers`, body)
       toast(tracker.id ? 'Tracker saved' : 'Tracker added'); onSaved()
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
@@ -193,6 +200,18 @@ function TrackerModal({ tracker, onClose, onSaved, onDelete }: { tracker: Partia
         )}
         <Field label="Direction" help={f.kind === 'yesno' ? 'Is “yes” the good answer? For “Headache?” it is not; for “Slept well?” it is.' : 'Decides which end gets the green band and whether a drop counts as good.'}>
           <Segmented value={f.higher_is_better ? 'up' : 'down'} onChange={v => setF({ ...f, higher_is_better: v === 'up' })} options={f.kind === 'yesno' ? [{ value: 'up', label: 'Yes is good' }, { value: 'down', label: 'Yes is bad' }] : [{ value: 'up', label: 'Higher is better' }, { value: 'down', label: 'Lower is better' }]} />
+        </Field>
+        <Field label="Default when not marked" help={f.kind === 'yesno' ? 'Days you do not answer count as this. For “Stomach problem?” pick No: you only mark the bad days.' : f.kind === 'scale' ? 'Days you do not score count as this value.' : 'Days without a measurement count as this value. Leave empty for none.'}>
+          {f.kind === 'yesno' ? (
+            <Segmented value={f.default_value === 1 ? 'yes' : f.default_value === 0 ? 'no' : 'none'} onChange={v => setF({ ...f, default_value: v === 'yes' ? 1 : v === 'no' ? 0 : null })} options={[{ value: 'none', label: 'No default' }, { value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]} />
+          ) : f.kind === 'scale' ? (
+            <select value={f.default_value === null ? '' : String(f.default_value)} onChange={e => setF({ ...f, default_value: e.target.value === '' ? null : Number(e.target.value) })} style={{ maxWidth: 200 }}>
+              <option value="">No default</option>
+              {scaleSteps(Number(f.min_value), Number(f.max_value), Number(f.step)).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          ) : (
+            <input type="number" step="any" value={f.default_value === null ? '' : f.default_value} onChange={e => setF({ ...f, default_value: e.target.value === '' ? null : Number(e.target.value) })} placeholder="none" style={{ maxWidth: 200 }} />
+          )}
         </Field>
         <div className="two-col tight">
           <Field label="Start date"><input type="date" value={f.start_date} onChange={e => setF({ ...f, start_date: e.target.value })} required /></Field>

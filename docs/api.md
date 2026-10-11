@@ -138,3 +138,4 @@ The server fetches the day's weather from [Open-Meteo](https://open-meteo.com/) 
 | `POST` | `/location` | `{"date": "2026-10-11", "lat": 47.37, "lon": 8.54, "place": "Zürich", "source": "iphone"}` — where you were that day (`date` defaults to today). The day's weather is fetched for that place at once and returned as `weather`. Pocket Homelab sends this once a day when it is opened; a Shortcut or Home Assistant can too. |
 
 Insights add `weather: {days, by_condition, by_temperature, by_daylight, units}`, each bucket `{key, label, days, scores: [{tracker_id, tracker_name, avg, n}], habit_rate, done, missed}`.
+| | | `default_value` (optional): assumed on every active past day with no entry — `0`/`1` for yes/no, a step for scales, any number for measurements; `null` = none. Month/day/insights return these days filled in, flagged via `defaulted`. |

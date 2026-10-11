@@ -45,7 +45,9 @@ type Tracker struct {
 	SortOrder      int     `json:"sort_order"`
 	StartDate      string  `json:"start_date"`
 	EndDate        *string `json:"end_date"`
-	CreatedAt      string  `json:"created_at"`
+	// DefaultValue is assumed on active past days with no entry (nil = none).
+	DefaultValue *float64 `json:"default_value"`
+	CreatedAt    string   `json:"created_at"`
 }
 
 // Settings are user-tunable preferences stored as key/value pairs.

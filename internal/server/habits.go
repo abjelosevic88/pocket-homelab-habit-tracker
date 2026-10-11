@@ -275,6 +275,7 @@ type trackerInput struct {
 	HigherIsBetter *bool    `json:"higher_is_better"`
 	StartDate      string   `json:"start_date"`
 	EndDate        *string  `json:"end_date"`
+	DefaultValue   *float64 `json:"default_value"` // null / omitted = no default
 }
 
 func (in trackerInput) apply(t *store.Tracker) string {
@@ -328,6 +329,21 @@ func (in trackerInput) apply(t *store.Tracker) string {
 			return "end_date must be YYYY-MM-DD"
 		}
 		t.EndDate = in.EndDate
+	}
+	t.DefaultValue = nil
+	if in.DefaultValue != nil {
+		v := *in.DefaultValue
+		switch t.Kind {
+		case "yesno":
+			if v != 0 && v != 1 {
+				return "default_value must be 0 (no) or 1 (yes)"
+			}
+		case "scale":
+			if v < t.MinValue || v > t.MaxValue {
+				return "default_value must be within the scale"
+			}
+		}
+		t.DefaultValue = &v
 	}
 	return ""
 }
