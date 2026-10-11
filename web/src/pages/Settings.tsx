@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { GeoPlace, APIToken, Settings as SettingsT } from '../lib/types'
@@ -30,6 +30,8 @@ function useSettingsForm() {
   const { toast } = useToast()
   const [f, setF] = useState<SettingsT | null>(settings)
   const [busy, setBusy] = useState(false)
+  // Settings may arrive after the tab mounted (direct load of /settings): adopt them once.
+  useEffect(() => { if (!f && settings) setF(settings) }, [settings]) // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     if (!f) return
     setBusy(true)
