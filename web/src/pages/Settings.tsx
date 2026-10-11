@@ -32,12 +32,14 @@ function useSettingsForm() {
   const [busy, setBusy] = useState(false)
   // Settings may arrive after the tab mounted (direct load of /settings): adopt them once.
   useEffect(() => { if (!f && settings) setF(settings) }, [settings]) // eslint-disable-line react-hooks/exhaustive-deps
-  const save = async () => {
-    if (!f) return
+  const save = async (override?: SettingsT, msg = 'Saved') => {
+    const body = override ?? f
+    if (!body) return false
     setBusy(true)
-    try { const s = await api.put<SettingsT>(`${V1}/settings`, f); setSettings(s); setF(s); toast('Saved') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    try { const s = await api.put<SettingsT>(`${V1}/settings`, body); setSettings(s); setF(s); toast(msg); return true } catch (e) { toast((e as Error).message, 'err'); return false } finally { setBusy(false) }
   }
-  return { f, setF, save, busy }
+  const dirty = Boolean(f && settings && JSON.stringify(f) !== JSON.stringify(settings))
+  return { f, setF, save, busy, dirty }
 }
 
 function General() {
@@ -53,7 +55,7 @@ function General() {
         </Field>
         {f.bad_thing_enabled && <Field label="Bad-thing prompt"><input value={f.bad_prompt} onChange={e => setF({ ...f, bad_prompt: e.target.value })} maxLength={80} /></Field>}
         <Field label="Open on"><Segmented value={f.landing} onChange={v => setF({ ...f, landing: v })} options={[{ value: 'month', label: 'Month page' }, { value: 'today', label: 'Today check-in' }]} /></Field>
-        <div><button className="btn primary" onClick={save} disabled={busy}>Save</button></div>
+        <div><button className="btn primary" onClick={() => save()} disabled={busy}>Save</button></div>
       </div>
     </Card>
   )
@@ -74,14 +76,14 @@ function Reminders() {
           <input value={f.reminder_url} onChange={e => setF({ ...f, reminder_url: e.target.value })} placeholder="https://ntfy.example.com/habits" />
         </Field>
         <Field label="Format"><Segmented value={f.reminder_format} onChange={v => setF({ ...f, reminder_format: v })} options={[{ value: 'ntfy', label: 'ntfy' }, { value: 'apprise', label: 'Apprise' }, { value: 'json', label: 'JSON webhook' }]} /></Field>
-        <div className="row"><button className="btn primary" onClick={save} disabled={busy}>Save</button><button className="btn" onClick={test} disabled={testing || !f.reminder_url}>Send test</button></div>
+        <div className="row"><button className="btn primary" onClick={() => save()} disabled={busy}>Save</button><button className="btn" onClick={test} disabled={testing || !f.reminder_url}>Send test</button></div>
       </div>
     </Card>
   )
 }
 
 function Weather() {
-  const { f, setF, save, busy } = useSettingsForm()
+  const { f, setF, save, busy, dirty } = useSettingsForm()
   const { settings } = useApp()
   const { toast } = useToast()
   const [q, setQ] = useState('')
@@ -96,12 +98,14 @@ function Weather() {
     try { setPlaces(await api.get<GeoPlace[]>(`${V1}/weather/geocode?q=${encodeURIComponent(q.trim())}`)) } catch (e) { toast((e as Error).message, 'err') } finally { setSearching(false) }
   }
   const fetchNow = async () => {
+    if (dirty && !(await save())) return
     setFetching(true)
     try { const r = await api.post<{ days: number }>(`${V1}/weather/refresh`, {}); setDays(r.days); toast(`Fetched ${r.days} days`) } catch (e) { toast((e as Error).message, 'err') } finally { setFetching(false) }
   }
   const hasHome = f.weather_lat !== 0 || f.weather_lon !== 0
   const unsavedHome = hasHome && (f.weather_lat !== settings?.weather_lat || f.weather_lon !== settings?.weather_lon)
-  const pick = (p: GeoPlace) => { setF({ ...f, weather_place: p.label, weather_lat: p.lat, weather_lon: p.lon }); setPlaces([]); setQ(''); toast(`Home set to ${p.name || p.label} — press Save`) }
+  // Picking a town saves it right away, so a reload or "Fetch now" never loses it.
+  const pick = async (p: GeoPlace) => { const next = { ...f, weather_place: p.label, weather_lat: p.lat, weather_lon: p.lon }; setF(next); setPlaces([]); setQ(''); await save(next, `Home location saved: ${p.name || p.label}`) }
   return (
     <Card title="Weather">
       <p className="muted">The day's weather from <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (free, no key): the condition, high and low, rain, sunshine and daylight, for your home location — or for where your phone was, when the companion app sends its location once a day (<code>POST /api/v1/location</code>). It shows on the month page and the check-in, and Insights compares your scores by weather, temperature and daylight.</p>
@@ -110,8 +114,8 @@ function Weather() {
           {hasHome && (
             <div className={`callout ${unsavedHome ? 'success' : ''} row geo-home`}>
               <span className="geo-pin">⌖</span>
-              <span style={{ flex: 1, minWidth: 0 }}><b>{f.weather_place || 'Home'}</b> <span className="muted small">{f.weather_lat.toFixed(3)}, {f.weather_lon.toFixed(3)}</span>{unsavedHome && <span className="muted small"> · not saved yet — press Save below</span>}</span>
-              <button type="button" className="btn ghost sm" onClick={() => setF({ ...f, weather_place: '', weather_lat: 0, weather_lon: 0 })}>Change</button>
+              <span style={{ flex: 1, minWidth: 0 }}><b>{f.weather_place || 'Home'}</b> <span className="muted small">{f.weather_lat.toFixed(3)}, {f.weather_lon.toFixed(3)}</span>{unsavedHome && <span className="muted small"> · not saved yet</span>}</span>
+              <button type="button" className="btn ghost sm" onClick={() => setF({ ...f, weather_place: '', weather_lat: 0, weather_lon: 0, weather_enabled: false })}>Change</button>
             </div>
           )}
           {!hasHome && <div className="row"><input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search() } }} placeholder="Town or city" /><button type="button" className="btn" onClick={search} disabled={searching}>{searching ? 'Searching…' : 'Search'}</button></div>}
@@ -123,7 +127,7 @@ function Weather() {
         </Field>
         <Field label="Fetch the weather"><Segmented value={f.weather_enabled ? 'on' : 'off'} onChange={v => setF({ ...f, weather_enabled: v === 'on' })} options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'On' }]} /></Field>
         <Field label="Temperatures in"><Segmented value={f.weather_units} onChange={v => setF({ ...f, weather_units: v })} options={[{ value: 'celsius', label: '°C' }, { value: 'fahrenheit', label: '°F' }]} /></Field>
-        <div className="row"><button className="btn primary" onClick={save} disabled={busy || (f.weather_enabled && !hasHome)}>Save</button><button className="btn" onClick={fetchNow} disabled={fetching || !f.weather_enabled}>Fetch now</button>{days !== null && <span className="muted small">{days} days written</span>}{f.weather_last && <span className="muted small">last fetch {f.weather_last.slice(0, 16).replace('T', ' ')}</span>}</div>
+        <div className="row"><button className="btn primary" onClick={() => save()} disabled={busy || (f.weather_enabled && !hasHome)}>{dirty ? 'Save' : 'Saved'}</button><button className="btn" onClick={fetchNow} disabled={fetching || !f.weather_enabled}>Fetch now</button>{days !== null && <span className="muted small">{days} days written</span>}{f.weather_last && <span className="muted small">last fetch {f.weather_last.slice(0, 16).replace('T', ' ')}</span>}</div>
         <p className="muted small">Turning it on fetches the last six weeks at once and the rest since your first habit in the background; the scheduler refreshes today and yesterday every three hours. A day's condition can be changed by hand on the month page.</p>
       </div>
     </Card>
