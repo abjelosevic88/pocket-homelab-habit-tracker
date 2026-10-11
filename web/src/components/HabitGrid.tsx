@@ -1,0 +1,60 @@
+import type { Day, MonthHabit } from '../lib/types'
+import { isoWeekday, shortDate } from '../lib/dates'
+
+interface Props {
+  days: Day[]
+  habits: MonthHabit[]
+  onCycle: (habit: MonthHabit, date: string, next: number) => void
+  onEdit?: (habit: MonthHabit) => void
+}
+
+// Click cycles blank -> done (green) -> missed (red) -> blank, like two pens.
+export function nextStatus(cur: number): number { return cur === 0 ? 1 : cur === 1 ? -1 : 0 }
+
+export default function HabitGrid({ days, habits, onCycle, onEdit }: Props) {
+  return (
+    <div className="grid-scroll">
+      <table className="habit-grid">
+        <thead>
+          <tr>
+            <th className="name-col" />
+            {days.map(d => <th key={d.date} className={`day ${d.weekend ? 'weekend' : ''} ${d.today ? 'today' : ''}`} title={shortDate(d.date)}><span className="num">{d.day}</span><span className="wd">{d.label}</span></th>)}
+            <th className="sum-col">✓ / ✗</th>
+          </tr>
+        </thead>
+        <tbody>
+          {habits.map(h => (
+            <tr key={h.id}>
+              <th className="name-col" scope="row">
+                <button className="name-btn" onClick={() => onEdit?.(h)} title={h.days === '1234567' ? 'Every day' : 'Scheduled on selected days'}>
+                  {h.color && <span className="swatch" style={{ background: h.color }} />}
+                  <span className="nm">{h.name}</span>
+                  {h.streak > 1 && <span className="streak" title={`${h.streak}-day streak`}>🔥{h.streak}</span>}
+                </button>
+              </th>
+              {days.map(d => {
+                const st = h.entries[d.date] || 0
+                const wd = isoWeekday(d.date)
+                const scheduled = h.days.includes(String(wd)) && d.date >= h.start_date && (!h.end_date || d.date <= h.end_date)
+                const cls = ['cell', st === 1 ? 'done' : st === -1 ? 'missed' : '', !scheduled ? 'off' : '', d.future ? 'future' : '', d.today ? 'today' : ''].join(' ')
+                return (
+                  <td key={d.date} className={cls}>
+                    <button
+                      disabled={d.future}
+                      aria-label={`${h.name} ${shortDate(d.date)}: ${st === 1 ? 'done' : st === -1 ? 'missed' : 'not marked'}`}
+                      title={`${shortDate(d.date)} · ${st === 1 ? 'done' : st === -1 ? 'missed' : scheduled ? 'not marked' : 'not scheduled'}`}
+                      onClick={() => onCycle(h, d.date, nextStatus(st))}
+                    >
+                      {st === 1 ? '✓' : st === -1 ? '✗' : ''}
+                    </button>
+                  </td>
+                )
+              })}
+              <td className="sum-col"><span className="ok">{h.done}</span><span className="muted"> / </span><span className="bad">{h.missed}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

@@ -1,0 +1,172 @@
+import { useState } from 'react'
+import { api, V1 } from '../lib/api'
+import { useApp } from '../lib/app-context'
+import type { APIToken, Settings as SettingsT } from '../lib/types'
+import { Card, Confirm, Field, Loading, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
+
+type Tab = 'general' | 'reminders' | 'profile' | 'api' | 'data' | 'about'
+
+export default function Settings() {
+  const [tab, setTab] = useState<Tab>('general')
+  return (
+    <>
+      <PageHeader title="Settings" />
+      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'reminders', label: 'Reminder' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
+      <div className="mt">
+        {tab === 'general' && <General />}
+        {tab === 'reminders' && <Reminders />}
+        {tab === 'profile' && <Profile />}
+        {tab === 'api' && <Tokens />}
+        {tab === 'data' && <Data />}
+        {tab === 'about' && <About />}
+      </div>
+    </>
+  )
+}
+
+function useSettingsForm() {
+  const { settings, setSettings } = useApp()
+  const { toast } = useToast()
+  const [f, setF] = useState<SettingsT | null>(settings)
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    if (!f) return
+    setBusy(true)
+    try { const s = await api.put<SettingsT>(`${V1}/settings`, f); setSettings(s); setF(s); toast('Saved') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  return { f, setF, save, busy }
+}
+
+function General() {
+  const { f, setF, save, busy } = useSettingsForm()
+  if (!f) return <Loading />
+  return (
+    <Card title="Preferences">
+      <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
+        <Field label="App title" help="Shown in the sidebar and browser tab."><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} /></Field>
+        <Field label="Journal prompt"><input value={f.journal_prompt} onChange={e => setF({ ...f, journal_prompt: e.target.value })} maxLength={80} /></Field>
+        <Field label="Open on"><Segmented value={f.landing} onChange={v => setF({ ...f, landing: v })} options={[{ value: 'month', label: 'Month page' }, { value: 'today', label: 'Today check-in' }]} /></Field>
+        <div><button className="btn primary" onClick={save} disabled={busy}>Save</button></div>
+      </div>
+    </Card>
+  )
+}
+
+function Reminders() {
+  const { f, setF, save, busy } = useSettingsForm()
+  const { toast } = useToast()
+  const [testing, setTesting] = useState(false)
+  if (!f) return <Loading />
+  const test = async () => { setTesting(true); try { await api.post(`${V1}/settings/test-reminder`, f); toast('Test sent') } catch (e) { toast((e as Error).message, 'err') } finally { setTesting(false) } }
+  return (
+    <Card title="Evening reminder">
+      <p className="muted">Once a day, if habits are still unmarked (or the journal is empty), a push is sent. Works with ntfy, Apprise, or any webhook. Leave the time empty to turn it off.</p>
+      <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
+        <Field label="Time (server local time)"><input type="time" value={f.reminder_time} onChange={e => setF({ ...f, reminder_time: e.target.value })} /></Field>
+        <Field label="Endpoint" help="ntfy: https://ntfy.sh/your-topic · Apprise: http://apprise:8000/notify/habits · json: any URL that accepts a POST">
+          <input value={f.reminder_url} onChange={e => setF({ ...f, reminder_url: e.target.value })} placeholder="https://ntfy.example.com/habits" />
+        </Field>
+        <Field label="Format"><Segmented value={f.reminder_format} onChange={v => setF({ ...f, reminder_format: v })} options={[{ value: 'ntfy', label: 'ntfy' }, { value: 'apprise', label: 'Apprise' }, { value: 'json', label: 'JSON webhook' }]} /></Field>
+        <div className="row"><button className="btn primary" onClick={save} disabled={busy}>Save</button><button className="btn" onClick={test} disabled={testing || !f.reminder_url}>Send test</button></div>
+      </div>
+    </Card>
+  )
+}
+
+function Profile() {
+  const { user, setUser, status } = useApp()
+  const { toast } = useToast()
+  const [f, setF] = useState({ name: user?.name || '', email: user?.email || '', current_password: '', new_password: '' })
+  const [busy, setBusy] = useState(false)
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true)
+    try { setUser(await api.put(`${V1}/auth/me`, f)); setF(x => ({ ...x, current_password: '', new_password: '' })); toast('Profile saved') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  return (
+    <Card title="Profile">
+      <form onSubmit={save} className="grid" style={{ gap: 14, maxWidth: 480 }}>
+        <Field label="Name"><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="Email"><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Field>
+        {status?.auth_mode === 'local' && <>
+          <hr />
+          <Field label="Current password"><input type="password" value={f.current_password} onChange={e => setF({ ...f, current_password: e.target.value })} autoComplete="current-password" /></Field>
+          <Field label="New password" help="At least 8 characters. Leave empty to keep the current one."><input type="password" value={f.new_password} onChange={e => setF({ ...f, new_password: e.target.value })} autoComplete="new-password" /></Field>
+        </>}
+        <div><button className="btn primary" disabled={busy}>Save</button></div>
+      </form>
+    </Card>
+  )
+}
+
+function Tokens() {
+  const { toast } = useToast()
+  const { data, reload } = useAsync(() => api.get<APIToken[]>(`${V1}/tokens`), [])
+  const [name, setName] = useState('')
+  const [fresh, setFresh] = useState('')
+  const [del, setDel] = useState<APIToken | null>(null)
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try { const r = await api.post<{ token: string }>(`${V1}/tokens`, { name: name || 'token' }); setFresh(r.token); setName(''); reload() } catch (e) { toast((e as Error).message, 'err') }
+  }
+  return (
+    <Card title="API tokens">
+      <p className="muted">Use as <code>Authorization: Bearer &lt;token&gt;</code>. Good for Homepage widgets, iOS Shortcuts (<code>POST /api/v1/checkin</code>), Home Assistant and n8n. See <code>docs/api.md</code>.</p>
+      <form onSubmit={create} className="row mb"><input value={name} onChange={e => setName(e.target.value)} placeholder="Token name (e.g. Homepage)" /><button className="btn primary">Create</button></form>
+      {fresh && <div className="callout success mb"><b>Copy it now — it is shown once.</b><pre className="mono" style={{ margin: '8px 0 0' }}>{fresh}</pre></div>}
+      {data && data.length > 0 ? (
+        <table className="table compact">
+          <thead><tr><th>Name</th><th>Prefix</th><th>Last used</th><th>Created</th><th /></tr></thead>
+          <tbody>{data.map(t => <tr key={t.id}><td>{t.name}</td><td className="mono">{t.prefix}…</td><td className="muted">{t.last_used_at ? t.last_used_at.slice(0, 16).replace('T', ' ') : 'never'}</td><td className="muted">{t.created_at.slice(0, 10)}</td><td className="right"><button className="btn ghost sm danger-text" onClick={() => setDel(t)}>Revoke</button></td></tr>)}</tbody>
+        </table>
+      ) : <p className="muted">No tokens yet.</p>}
+      {del && <Confirm title={`Revoke “${del.name}”?`} message="Anything using this token stops working immediately." onCancel={() => setDel(null)} onConfirm={async () => { await api.del(`${V1}/tokens/${del.id}`); setDel(null); reload() }} />}
+    </Card>
+  )
+}
+
+function Data() {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+  const importFile = async (file: File) => {
+    setBusy(true)
+    try { const r = await api.post<{ created: number; entries: number }>(`${V1}/import`, JSON.parse(await file.text())); toast(`Imported ${r.entries} entries (${r.created} new habits/trackers)`) } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  return (
+    <div className="two-col">
+      <Card title="Backup">
+        <p className="muted">A consistent copy of the SQLite database (<code>VACUUM INTO</code>). Restore by stopping the app and replacing <code>pocket-habits.db</code> in the data directory.</p>
+        <a className="btn primary" href={`${V1}/backup`}>Download database</a>
+      </Card>
+      <Card title="Export & import">
+        <p className="muted">Portable JSON (re-importable here) or a long CSV for spreadsheets.</p>
+        <div className="row mb"><a className="btn" href={`${V1}/export.json`}>Export JSON</a><a className="btn" href={`${V1}/export.csv`}>Export CSV</a></div>
+        <label className="btn ghost">{busy ? 'Importing…' : 'Import JSON…'}<input type="file" accept="application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])} /></label>
+        <p className="muted small mt">Import merges: habits and trackers are matched by name, entries are upserted.</p>
+      </Card>
+    </div>
+  )
+}
+
+function About() {
+  const { data } = useAsync(() => api.get<Record<string, unknown>>(`${V1}/settings/system`), [])
+  const counts = (data?.counts || {}) as Record<string, number>
+  return (
+    <Card title="About">
+      <p><b>Pocket Habits</b> is a one-page habit tracker modelled on a bullet-journal spread: seven habits in green and red, a sleep score and day rating out of five, a weight row, and one good thing per day. One binary, one SQLite file, one volume.</p>
+      <p className="muted small">Open source (MIT) — <a href="https://github.com/abjelosevic88/pocket-homelab-habit-tracker" target="_blank" rel="noreferrer">github.com/abjelosevic88/pocket-homelab-habit-tracker</a>. Inspired by the “I Finally Made Habit Tracking Simple” notebook system.</p>
+      {data && (
+        <table className="table compact mt">
+          <tbody>
+            <tr><th>Version</th><td className="mono">{String(data.version)}</td></tr>
+            <tr><th>Runtime</th><td className="mono">{String(data.go)} · {String(data.os)}/{String(data.arch)}</td></tr>
+            <tr><th>Auth mode</th><td className="mono">{String(data.auth_mode)}</td></tr>
+            <tr><th>Database</th><td className="mono">{String(data.db_path)} · {(Number(data.db_bytes) / 1024).toFixed(0)} KB</td></tr>
+            <tr><th>Timezone</th><td className="mono">{String(data.timezone)}</td></tr>
+            <tr><th>Uptime</th><td className="mono">{String(data.uptime)}</td></tr>
+            <tr><th>Rows</th><td className="mono">{counts.habits} habits · {counts.habit_entries} marks · {counts.trackers} trackers · {counts.tracker_entries} values · {counts.journal} journal lines</td></tr>
+          </tbody>
+        </table>
+      )}
+    </Card>
+  )
+}

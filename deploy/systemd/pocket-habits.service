@@ -1,0 +1,21 @@
+[Unit]
+Description=Pocket Habits
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pocket-habits
+Group=pocket-habits
+WorkingDirectory=/var/lib/pocket-habits
+Environment=DATA_DIR=/var/lib/pocket-habits PORT=8080 TZ=Europe/Berlin BASE_URL=https://habits.example.com
+ExecStart=/usr/local/bin/pocket-habits
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pocket-habits
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
