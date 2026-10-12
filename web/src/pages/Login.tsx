@@ -37,7 +37,7 @@ export default function Login({ mode }: { mode: 'login' | 'setup' }) {
           </form>
         </Card>
         {mode === 'setup' && <p className="muted small mt">One page a month, seven habits, one minute a night.</p>}
-        {status?.version && <p className="muted small right mt">v{status.version}</p>}
+        {status?.version && <p className="muted small right mt">v{status.version.replace(/^v/, '')}</p>}
       </div>
     </div>
   )
