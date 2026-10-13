@@ -161,7 +161,7 @@ Go 1.22+ and Node 20+. Stack: Go + chi + modernc SQLite (no CGO), React 19 + Vit
 
 ## Credits
 
-The system is from ODHD's video [*I Finally Made Habit Tracking Simple*](https://www.youtube.com/watch?v=_OutCeU5WL4). Pocket Habits just makes it a web page. Sibling project: [Pocket Invoicing](https://github.com/abjelosevic88/pocket-homelab-invoicing).
+The system is from ODHD's video [*I Finally Made Habit Tracking Simple*](https://www.youtube.com/watch?v=_OutCeU5WL4). Pocket Habits just makes it a web page. Sibling projects: [Pocket Invoicing](https://github.com/abjelosevic88/pocket-homelab-invoicing), [Pocket Inventory](https://github.com/abjelosevic88/pocket-homelab-inventory), [Pocket Bookshelf](https://github.com/abjelosevic88/pocket-homelab-bookshelf), [Pocket Split](https://github.com/abjelosevic88/pocket-homelab-cost-split) and [Pocket Subtitles](https://github.com/abjelosevic88/pocket-homelab-subtitles).
 
 ## License
 
