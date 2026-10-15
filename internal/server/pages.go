@@ -56,14 +56,15 @@ func (s *Server) handleToday(w http.ResponseWriter, r *http.Request) {
 // handleCheckin writes a whole day in one call — meant for iOS Shortcuts,
 // Home Assistant and similar automations.
 //
-//	{"date":"2026-10-11","habits":{"1":1,"2":-1},"trackers":{"1":4,"3":81.2},"journal":"Great walk."}
+//	{"date":"2026-10-11","habits":{"1":1,"2":-1},"trackers":{"1":4,"3":81.2},"journal":"Great walk.","important":"Moved in."}
 func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Date     string              `json:"date"`
-		Habits   map[string]int      `json:"habits"`
-		Trackers map[string]*float64 `json:"trackers"`
-		Journal  *string             `json:"journal"`
-		Bad      *string             `json:"journal_bad"`
+		Date      string              `json:"date"`
+		Habits    map[string]int      `json:"habits"`
+		Trackers  map[string]*float64 `json:"trackers"`
+		Journal   *string             `json:"journal"`
+		Bad       *string             `json:"journal_bad"`
+		Important *string             `json:"important"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -103,13 +104,8 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if in.Journal != nil {
-		if err := s.store.SetJournal(ctx, in.Date, *in.Journal, in.Bad); err != nil {
-			s.fail(w, err, "set journal")
-			return
-		}
-	} else if in.Bad != nil {
-		if err := s.store.SetJournalBad(ctx, in.Date, *in.Bad); err != nil {
+	if in.Journal != nil || in.Bad != nil || in.Important != nil {
+		if err := s.store.SetJournalFields(ctx, in.Date, in.Journal, in.Bad, in.Important); err != nil {
 			s.fail(w, err, "set journal")
 			return
 		}
@@ -182,34 +178,33 @@ func (s *Server) handleSetJournal(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "date must be YYYY-MM-DD")
 		return
 	}
-	if date > store.Today() {
-		writeErr(w, http.StatusBadRequest, "cannot write a future day")
-		return
-	}
 	var in struct {
-		Text *string `json:"text"`
-		Bad  *string `json:"bad"`
+		Text      *string `json:"text"`
+		Bad       *string `json:"bad"`
+		Important *string `json:"important"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	if (in.Text != nil && len(*in.Text) > 4000) || (in.Bad != nil && len(*in.Bad) > 4000) {
-		writeErr(w, http.StatusBadRequest, "keep it under 4000 characters")
+	// An important note may go on a day ahead (an appointment, a trip); the journal lines may not.
+	if date > store.Today() && (in.Text != nil || in.Bad != nil) {
+		writeErr(w, http.StatusBadRequest, "cannot write a future day")
 		return
+	}
+	for _, v := range []*string{in.Text, in.Bad, in.Important} {
+		if v != nil && len(*v) > 4000 {
+			writeErr(w, http.StatusBadRequest, "keep it under 4000 characters")
+			return
+		}
 	}
 	ctx := r.Context()
-	var err error
-	switch {
-	case in.Text != nil:
-		err = s.store.SetJournal(ctx, date, *in.Text, in.Bad)
-	case in.Bad != nil:
-		err = s.store.SetJournalBad(ctx, date, *in.Bad)
-	}
-	if err != nil {
-		s.fail(w, err, "set journal")
-		return
+	if in.Text != nil || in.Bad != nil || in.Important != nil {
+		if err := s.store.SetJournalFields(ctx, date, in.Text, in.Bad, in.Important); err != nil {
+			s.fail(w, err, "set journal")
+			return
+		}
 	}
 	full, _ := s.store.JournalFull(ctx, date, date)
-	writeJSON(w, http.StatusOK, map[string]string{"date": date, "text": full[date].Text, "bad": full[date].Bad})
+	writeJSON(w, http.StatusOK, map[string]string{"date": date, "text": full[date].Text, "bad": full[date].Bad, "important": full[date].Important})
 }

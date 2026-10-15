@@ -48,6 +48,8 @@ type MonthSummary struct {
 	Rate        *float64 `json:"rate"`
 	PerfectDays int      `json:"perfect_days"`
 	JournalDays int      `json:"journal_days"`
+	// ImportantDays counts the days with an important note.
+	ImportantDays int `json:"important_days"`
 }
 
 // MonthPage is everything the month view needs in one call.
@@ -58,7 +60,9 @@ type MonthPage struct {
 	Trackers   []MonthTracker    `json:"trackers"`
 	Journal    map[string]string `json:"journal"`
 	JournalBad map[string]string `json:"journal_bad"`
-	Summary    MonthSummary      `json:"summary"`
+	// Important holds the days' important notes by date; those days are marked red.
+	Important map[string]string `json:"important"`
+	Summary   MonthSummary      `json:"summary"`
 	// The weather by date, when the server fetches it; otherwise empty.
 	Weather map[string]WeatherDay `json:"weather"`
 }
@@ -112,8 +116,11 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 	if err != nil {
 		return nil, err
 	}
-	journal, bad := map[string]string{}, map[string]string{}
+	journal, bad, important := map[string]string{}, map[string]string{}, map[string]string{}
 	for d, e := range full {
+		if e.Important != "" {
+			important[d] = e.Important
+		}
 		if e.Text != "" {
 			journal[d] = e.Text
 		}
@@ -125,7 +132,7 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 	if err != nil {
 		return nil, err
 	}
-	page := &MonthPage{Month: month, Days: days, Journal: journal, JournalBad: bad, Habits: []MonthHabit{}, Trackers: []MonthTracker{}, Weather: weather}
+	page := &MonthPage{Month: month, Days: days, Journal: journal, JournalBad: bad, Important: important, Habits: []MonthHabit{}, Trackers: []MonthTracker{}, Weather: weather}
 	perfect := map[string]bool{}
 	for _, d := range days {
 		if !d.Future {
@@ -172,6 +179,7 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 		page.Summary.Rate = &r
 	}
 	page.Summary.JournalDays = len(journal)
+	page.Summary.ImportantDays = len(important)
 	for _, t := range trackers {
 		mt := MonthTracker{Tracker: t, Entries: tEntries[t.ID], Defaulted: tDefaulted[t.ID]}
 		if mt.Entries == nil {
@@ -242,6 +250,7 @@ type TodayPage struct {
 	Trackers   []TodayTracker `json:"trackers"`
 	Journal    string         `json:"journal"`
 	JournalBad string         `json:"journal_bad"`
+	Important  string         `json:"important"`
 	Done       int            `json:"done"`
 	Total      int            `json:"total"`
 	// The day's weather, when the server has it.
@@ -296,7 +305,7 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 	if wd == 0 {
 		wd = 7
 	}
-	page := &TodayPage{Date: date, Weekday: wd, Journal: journal[date].Text, JournalBad: journal[date].Bad, Habits: []TodayHabit{}, Trackers: []TodayTracker{}}
+	page := &TodayPage{Date: date, Weekday: wd, Journal: journal[date].Text, JournalBad: journal[date].Bad, Important: journal[date].Important, Habits: []TodayHabit{}, Trackers: []TodayTracker{}}
 	if w, err := s.WeatherDay(ctx, date); err == nil {
 		page.Weather = &w
 	}
@@ -494,6 +503,8 @@ type JournalLine struct {
 	Date string `json:"date"`
 	Text string `json:"text"`
 	Bad  string `json:"bad,omitempty"`
+	// Important is the day's important note.
+	Important string `json:"important,omitempty"`
 }
 
 // InsightsRange computes insights for an inclusive date range.
@@ -686,7 +697,7 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(jd)))
 	for _, d := range jd {
-		out.Journal = append(out.Journal, JournalLine{Date: d, Text: journal[d].Text, Bad: journal[d].Bad})
+		out.Journal = append(out.Journal, JournalLine{Date: d, Text: journal[d].Text, Bad: journal[d].Bad, Important: journal[d].Important})
 	}
 	st, _ := s.GetSettings(ctx)
 	if st.WeatherEnabled {

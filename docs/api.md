@@ -17,7 +17,7 @@ For a ready-made client, [Pocket Homelab](https://pockethomelab.com/) (iPhone, i
 | `GET` | `/today` | Everything for today: scheduled habits with status, trackers with value and previous value, journal text, done/total. |
 | `GET` | `/days/{date}` | Same for any date. |
 | `POST` | `/checkin` | Write a whole day at once (below). |
-| `GET` | `/months/{month}` | The month page: days, habits with entries + counts + streak, trackers with entries + avg/min/max, journal, summary. `current` works as a month. |
+| `GET` | `/months/{month}` | The month page: days, habits with entries + counts + streak, trackers with entries + avg/min/max, journal, `important` (date → note), summary. `current` works as a month. |
 | `GET` | `/dashboard` | Compact status for widgets. |
 | `GET` | `/insights?months=3` or `?from=&to=` | Rates, streaks, weekday heat, tracker series, correlations, journal lines. |
 
@@ -35,6 +35,7 @@ For a ready-made client, [Pocket Homelab](https://pockethomelab.com/) (iPhone, i
 - `habits`: habit id → `1` done, `-1` missed, `0` clear.
 - `trackers`: tracker id → number, or `null` to clear. Yes/no trackers take `1` (yes) or `0` (no).
 - `journal_bad`: the optional "one bad thing" line (Settings → General).
+- `important`: the day's important note; the month page marks the day red.
 - Every key is optional; `date` defaults to today. Future dates are rejected. Returns the day payload.
 
 Get the ids from `GET /habits` and `GET /trackers`.
@@ -47,7 +48,7 @@ Get the ids from `GET /habits` and `GET /trackers`.
 | `DELETE` | `/habits/{id}/entries/{date}` | |
 | `PUT` | `/trackers/{id}/entries/{date}` | `{"value": 4.5}` or `{"value": null}` |
 | `DELETE` | `/trackers/{id}/entries/{date}` | |
-| `PUT` | `/journal/{date}` | `{"text": "…"}` and/or `{"bad": "…"}` (both empty deletes the day) |
+| `PUT` | `/journal/{date}` | `{"text": "…"}`, `{"bad": "…"}` and/or `{"important": "…"}`; a field left out is kept, all empty deletes the day. `important` may go on a day ahead, the lines may not. |
 | `GET` | `/journal?from=&to=` | `{date: text}` |
 
 ## Habits & trackers

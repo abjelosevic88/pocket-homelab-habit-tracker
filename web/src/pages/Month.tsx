@@ -17,6 +17,14 @@ export default function Month() {
   const { data, setData, loading, error } = useAsync(() => api.get<MonthPage>(`${V1}/months/${month}`), [month])
   const isCurrent = month === currentMonth()
   const [wx, setWx] = useState<{ day: Day; w?: WeatherDay } | null>(null)
+  const [imp, setImp] = useState<Day | null>(null)
+  const saveImportant = async (date: string, text: string) => {
+    try {
+      await api.put(`${V1}/journal/${date}`, { important: text })
+      setData(await api.get<MonthPage>(`${V1}/months/${month}`))
+      setImp(null)
+    } catch (e) { toast((e as Error).message, 'err') }
+  }
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -61,7 +69,7 @@ export default function Month() {
       <Card flush className="mb">
         {data.habits.length === 0
           ? <div className="pad"><Empty title="No habits on this page yet">Pick up to seven things you want to do (or avoid) this month. <Link to="/manage">Add habits →</Link></Empty></div>
-          : <HabitGrid days={data.days} habits={data.habits} onCycle={cycle} onEdit={h => navigate(`/manage?habit=${h.id}`)} weather={settings?.weather_enabled ? data.weather : null} units={settings?.weather_units} onWeather={(day, w) => setWx({ day, w })} />}
+          : <HabitGrid days={data.days} habits={data.habits} onCycle={cycle} onEdit={h => navigate(`/manage?habit=${h.id}`)} weather={settings?.weather_enabled ? data.weather : null} units={settings?.weather_units} onWeather={(day, w) => setWx({ day, w })} important={data.important} onDay={setImp} />}
         {data.trackers.length > 0 && (
           <div className="trackers">
             {data.trackers.map(t => <TrackerChart key={t.id} days={data.days} tracker={t} onSet={setValue} />)}
@@ -69,9 +77,13 @@ export default function Month() {
         )}
       </Card>
 
+      <ImportantDays page={data} onOpen={setImp} />
+
       <Journal page={data} prompt={settings?.journal_prompt || 'What was great about today?'} badPrompt={settings?.bad_thing_enabled ? (settings.bad_prompt || 'And one thing that was bad?') : null}
         onSaved={(date, text) => setData(d => d && { ...d, journal: { ...d.journal, [date]: text }, summary: { ...d.summary, journal_days: Object.values({ ...d.journal, [date]: text }).filter(Boolean).length } })}
         onSavedBad={(date, text) => setData(d => d && { ...d, journal_bad: { ...d.journal_bad, [date]: text } })} />
+
+      {imp && <ImportantModal day={imp} text={data.important?.[imp.date] || ''} onSave={t => saveImportant(imp.date, t)} onClose={() => setImp(null)} />}
 
       {wx && (
         <Modal title={`Weather on ${shortDate(wx.day.date)}`} onClose={() => setWx(null)}>
@@ -90,6 +102,41 @@ export default function Month() {
         </Modal>
       )}
     </>
+  )
+}
+
+// The month's important days, red, oldest first; a click opens the note.
+function ImportantDays({ page, onOpen }: { page: MonthPage; onOpen: (d: Day) => void }) {
+  const days = page.days.filter(d => page.important?.[d.date])
+  if (days.length === 0) return null
+  return (
+    <Card title={<span className="important-prompt">Important days</span>} actions={<span className="muted small">{days.length} this month · click a day's number above to add one</span>} className="mb">
+      <ul className="important-list">
+        {days.map(d => (
+          <li key={d.date}>
+            <button type="button" onClick={() => onOpen(d)}><span className="jdate">{shortDate(d.date)}</span><span className="itext">{page.important?.[d.date]}</span></button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+function ImportantModal({ day, text, onSave, onClose }: { day: Day; text: string; onSave: (t: string) => Promise<void>; onClose: () => void }) {
+  const [v, setV] = useState(text)
+  const [saving, setSaving] = useState(false)
+  const save = async (t: string) => { setSaving(true); await onSave(t.trim()); setSaving(false) }
+  return (
+    <Modal title={`Important · ${shortDate(day.date)}`} onClose={onClose}>
+      <p className="small muted">Something to remember about this day. The day turns red on the month page.</p>
+      <textarea rows={4} autoFocus value={v} onChange={e => setV(e.target.value)} maxLength={4000} placeholder="What happened, or what is coming…" style={{ width: '100%' }}
+        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save(v) }} />
+      <div className="row" style={{ gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+        {text && <button className="btn ghost danger-text" disabled={saving} onClick={() => save('')}>Remove</button>}
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={saving || v.trim() === text} onClick={() => save(v)}>{saving ? 'Saving…' : 'Save'}</button>
+      </div>
+    </Modal>
   )
 }
 

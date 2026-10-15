@@ -72,6 +72,10 @@ export default function Today() {
         <JournalBox date={date} field="text" text={data.journal} onSaved={t => setData(d => d && { ...d, journal: t })} placeholder="One thing that happened today that was great." />
       </Card>
 
+      <Card title="Important" flush className="section important">
+        <JournalBox date={date} field="important" text={data.important || ''} onSaved={t => setData(d => d && { ...d, important: t })} placeholder="Something to remember about this day. The day turns red on the month page." />
+      </Card>
+
       {settings?.bad_thing_enabled && (
         <Card title={settings.bad_prompt || 'And one thing that was bad?'} flush className="section bad">
           <JournalBox date={date} field="bad" text={data.journal_bad} onSaved={t => setData(d => d && { ...d, journal_bad: t })} placeholder="One thing that was bad — name it and let it go." />
@@ -145,7 +149,7 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
   )
 }
 
-function JournalBox({ date, text, field, placeholder, onSaved }: { date: string; text: string; field: 'text' | 'bad'; placeholder: string; onSaved: (t: string) => void }) {
+function JournalBox({ date, text, field, placeholder, onSaved }: { date: string; text: string; field: 'text' | 'bad' | 'important'; placeholder: string; onSaved: (t: string) => void }) {
   const [v, setV] = useState(text)
   const last = useRef(text)
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')

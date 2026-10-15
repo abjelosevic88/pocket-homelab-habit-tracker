@@ -287,7 +287,7 @@ func (s *Server) buildExport(ctx context.Context) (*Export, error) {
 		}
 	}
 	for d, e := range j {
-		ex.Journal = append(ex.Journal, store.JournalLine{Date: d, Text: e.Text, Bad: e.Bad})
+		ex.Journal = append(ex.Journal, store.JournalLine{Date: d, Text: e.Text, Bad: e.Bad, Important: e.Important})
 	}
 	sortRows(ex)
 	return ex, nil
@@ -337,6 +337,9 @@ func (s *Server) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 		}
 		if j.Bad != "" {
 			_ = cw.Write([]string{j.Date, "journal_bad", "", "", j.Bad})
+		}
+		if j.Important != "" {
+			_ = cw.Write([]string{j.Date, "important", "", "", j.Important})
 		}
 	}
 	cw.Flush()
@@ -413,9 +416,9 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, j := range ex.Journal {
-		if validDate(j.Date) && (j.Text != "" || j.Bad != "") {
-			bad := j.Bad
-			if err := s.store.SetJournal(ctx, j.Date, j.Text, &bad); err == nil {
+		if validDate(j.Date) && (j.Text != "" || j.Bad != "" || j.Important != "") {
+			text, bad, important := j.Text, j.Bad, j.Important
+			if err := s.store.SetJournalFields(ctx, j.Date, &text, &bad, &important); err == nil {
 				n++
 			}
 		}

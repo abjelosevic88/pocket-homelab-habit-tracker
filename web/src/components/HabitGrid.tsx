@@ -10,12 +10,16 @@ interface Props {
   weather?: Record<string, WeatherDay> | null
   units?: string
   onWeather?: (day: Day, w: WeatherDay | undefined) => void
+  /** Important notes by date: those days are drawn red. */
+  important?: Record<string, string> | null
+  /** A click on a day's number, to write or read its important note. */
+  onDay?: (day: Day) => void
 }
 
 // Click cycles blank -> done (green) -> missed (red) -> blank, like two pens.
 export function nextStatus(cur: number): number { return cur === 0 ? 1 : cur === 1 ? -1 : 0 }
 
-export default function HabitGrid({ days, habits, onCycle, onEdit, weather, units = 'celsius', onWeather }: Props) {
+export default function HabitGrid({ days, habits, onCycle, onEdit, weather, units = 'celsius', onWeather, important, onDay }: Props) {
   const hasWeather = !!weather && Object.keys(weather).length > 0
   return (
     <div className="grid-scroll">
@@ -23,7 +27,16 @@ export default function HabitGrid({ days, habits, onCycle, onEdit, weather, unit
         <thead>
           <tr>
             <th className="name-col" />
-            {days.map(d => <th key={d.date} className={`day ${d.weekend ? 'weekend' : ''} ${d.today ? 'today' : ''}`} title={shortDate(d.date)}><span className="num">{d.day}</span><span className="wd">{d.label}</span></th>)}
+            {days.map(d => {
+              const note = important?.[d.date]
+              return (
+                <th key={d.date} className={`day ${d.weekend ? 'weekend' : ''} ${d.today ? 'today' : ''} ${note ? 'important' : ''}`}>
+                  <button type="button" className="day-btn" onClick={() => onDay?.(d)} title={note ? `${shortDate(d.date)} · ${note}` : `${shortDate(d.date)} · click to add an important note`}>
+                    <span className="num">{d.day}</span><span className="wd">{d.label}</span>
+                  </button>
+                </th>
+              )
+            })}
             <th className="sum-col">✓ / ✗</th>
           </tr>
           {hasWeather && (

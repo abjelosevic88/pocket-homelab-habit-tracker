@@ -57,12 +57,12 @@ export interface Day { date: string; day: number; weekday: number; label: string
 
 export interface MonthHabit extends Habit { entries: Record<string, number>; done: number; missed: number; scheduled: number; streak: number }
 export interface MonthTracker extends Tracker { entries: Record<string, number>; defaulted: Record<string, boolean>; avg: number | null; min: number | null; max: number | null; first: number | null; last: number | null }
-export interface MonthSummary { done: number; missed: number; unmarked: number; rate: number | null; perfect_days: number; journal_days: number }
-export interface MonthPage { month: string; days: Day[]; habits: MonthHabit[]; trackers: MonthTracker[]; journal: Record<string, string>; journal_bad: Record<string, string>; summary: MonthSummary; weather?: Record<string, WeatherDay> | null }
+export interface MonthSummary { done: number; missed: number; unmarked: number; rate: number | null; perfect_days: number; journal_days: number; important_days?: number }
+export interface MonthPage { month: string; days: Day[]; habits: MonthHabit[]; trackers: MonthTracker[]; journal: Record<string, string>; journal_bad: Record<string, string>; important?: Record<string, string> | null; summary: MonthSummary; weather?: Record<string, WeatherDay> | null }
 
 export interface TodayHabit extends Habit { status: number; scheduled: boolean; streak: number }
 export interface TodayTracker extends Tracker { value: number | null; previous: number | null; defaulted: boolean }
-export interface TodayPage { date: string; weekday: number; habits: TodayHabit[]; trackers: TodayTracker[]; journal: string; journal_bad: string; done: number; total: number; weather?: WeatherDay | null }
+export interface TodayPage { date: string; weekday: number; habits: TodayHabit[]; trackers: TodayTracker[]; journal: string; journal_bad: string; important?: string; done: number; total: number; weather?: WeatherDay | null }
 
 export interface Dashboard {
   date: string; today_done: number; today_total: number; today_left: number; journal_today: boolean
@@ -74,6 +74,6 @@ export interface HabitInsight extends Habit { done: number; missed: number; sche
 export interface TrackerPoint { date: string; value: number }
 export interface TrackerInsight extends Tracker { count: number; avg: number | null; min: number | null; max: number | null; first: number | null; last: number | null; series: TrackerPoint[]; weekly: Record<string, number> }
 export interface Correlation { tracker_id: number; tracker_name: string; kind: 'habit' | 'yesno'; habit_id: number; habit_name: string; avg_done: number | null; avg_missed: number | null; n_done: number; n_missed: number; delta: number | null }
-export interface Insights { from: string; to: string; habits: HabitInsight[]; trackers: TrackerInsight[]; correlations: Correlation[]; journal: { date: string; text: string; bad?: string }[]; weather?: WeatherInsights | null }
+export interface Insights { from: string; to: string; habits: HabitInsight[]; trackers: TrackerInsight[]; correlations: Correlation[]; journal: { date: string; text: string; bad?: string; important?: string }[]; weather?: WeatherInsights | null }
 
 export interface APIToken { id: number; name: string; prefix: string; last_used_at: string | null; created_at: string }

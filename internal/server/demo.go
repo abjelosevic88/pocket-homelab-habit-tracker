@@ -61,6 +61,7 @@ func (s *Server) seedDemo(ctx context.Context) error {
 		"Boss back from holiday — pressure off.", "Fixed the leaking tap myself.", "Dinner with friends.", "Read for an hour.",
 		"Sun was out all day.", "Closed three tickets at work.", "Dog learned a new trick.", "Walked to work.",
 	}
+	important := []string{"Started the new job.", "Doctor: blood tests came back fine.", "Signed the flat contract.", "Anna's birthday party."}
 	for d := start; !d.After(today); d = d.AddDate(0, 0, 1) {
 		ds := d.Format("2006-01-02")
 		doneCount := 0
@@ -103,6 +104,10 @@ func (s *Server) seedDemo(ctx context.Context) error {
 		}
 		if rng.Float64() < 0.85 {
 			_ = s.store.SetJournal(ctx, ds, lines[rng.Intn(len(lines))], nil)
+		}
+		// Now and then a day worth remembering, marked red on the month page.
+		if rng.Float64() < 0.06 {
+			_ = s.store.SetJournalImportant(ctx, ds, important[rng.Intn(len(important))])
 		}
 	}
 	s.log.Info("demo data seeded")

@@ -377,3 +377,18 @@ input.num { width: 90px; text-align: right; }
 .sidebar .foot .foot-id > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar .foot .ver { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 .sidebar .foot .ver:hover { color: var(--accent-hover); text-decoration: none; }
+
+/* Important days: the day's number in a red circle; the note on Today and under the month grid. */
+.habit-grid thead th.day .day-btn { all: unset; display: block; width: 100%; cursor: pointer; border-radius: 6px; padding: 1px 0; }
+.habit-grid thead th.day .day-btn:hover { background: var(--surface-2); }
+.habit-grid thead th.day .day-btn:focus-visible { outline: 2px solid var(--accent); }
+.habit-grid thead th.day.important .num { display: inline-block; min-width: 20px; padding: 1px 0; border-radius: 999px; background: var(--red); color: #fff; font-weight: 700; }
+.important-prompt { color: var(--red-ink); font-weight: 600; }
+.today .card.section.important .card-head h2 { color: var(--red-ink); }
+.important-list { list-style: none; margin: 0; padding: 0; }
+.important-list li { border-bottom: 1px dashed var(--border); }
+.important-list li:last-child { border-bottom: 0; }
+.important-list button { all: unset; display: flex; gap: 10px; width: 100%; padding: 6px 0; cursor: pointer; }
+.important-list button:hover .itext { text-decoration: underline; }
+.important-list .jdate { width: 96px; flex-shrink: 0; font-size: 12px; color: var(--red-ink); font-weight: 600; }
+.important-list .itext { white-space: pre-wrap; }

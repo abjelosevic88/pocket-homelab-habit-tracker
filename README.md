@@ -21,6 +21,7 @@ Most habit trackers fail because they become another habit you can't stick to. T
 - **Sleep score and day rating out of five**, drawn as a line over three highlighter bands, so you can *see* how sleep and mood line up with what you did or didn't do.
 - **A weight row** (or steps, hours, anything with a number).
 - **One good thing per day.** A single line of gratitude journal next to the grid. Optionally one bad thing too (Settings → General).
+- **Important days.** A note for a day you want to remember (Today, or click a date on the month grid); the date turns red on the month page and the month lists them.
 
 On the go, **[Pocket Homelab](https://pockethomelab.com/)** is its companion app for iPhone, iPad, Mac and Android: tonight's check-in, the month grid and your streaks in your pocket. See [Companion app](#companion-app-pocket-homelab).
 

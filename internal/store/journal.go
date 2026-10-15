@@ -6,37 +6,54 @@ import "context"
 type JournalEntry struct {
 	Text string `json:"text"`
 	Bad  string `json:"bad"`
+	// Important is something to remember about the day; the month page marks the day red.
+	Important string `json:"important"`
 }
 
-// SetJournal writes the day's good line; a nil bad leaves the bad line untouched.
-// A day with both lines empty is deleted.
-func (s *Store) SetJournal(ctx context.Context, date string, text string, bad *string) error {
+// SetJournalFields writes the fields that are not nil and leaves the others as they are.
+// A day with every field empty is deleted.
+func (s *Store) SetJournalFields(ctx context.Context, date string, text, bad, important *string) error {
 	if _, err := ParseDate(date); err != nil {
 		return err
 	}
 	cur := s.journalDay(ctx, date)
-	cur.Text = text
+	if text != nil {
+		cur.Text = *text
+	}
 	if bad != nil {
 		cur.Bad = *bad
 	}
-	if cur.Text == "" && cur.Bad == "" {
+	if important != nil {
+		cur.Important = *important
+	}
+	if cur.Text == "" && cur.Bad == "" && cur.Important == "" {
 		_, err := s.DB.ExecContext(ctx, `DELETE FROM journal WHERE date = ?`, date)
 		return err
 	}
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO journal (date, text, bad_text, updated_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT(date) DO UPDATE SET text = excluded.text, bad_text = excluded.bad_text, updated_at = excluded.updated_at`, date, cur.Text, cur.Bad, Now())
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO journal (date, text, bad_text, important, updated_at) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(date) DO UPDATE SET text = excluded.text, bad_text = excluded.bad_text, important = excluded.important, updated_at = excluded.updated_at`,
+		date, cur.Text, cur.Bad, cur.Important, Now())
 	return err
+}
+
+// SetJournal writes the day's good line; a nil bad leaves the bad line untouched.
+func (s *Store) SetJournal(ctx context.Context, date string, text string, bad *string) error {
+	return s.SetJournalFields(ctx, date, &text, bad, nil)
 }
 
 // SetJournalBad writes only the bad line.
 func (s *Store) SetJournalBad(ctx context.Context, date, bad string) error {
-	cur := s.journalDay(ctx, date)
-	return s.SetJournal(ctx, date, cur.Text, &bad)
+	return s.SetJournalFields(ctx, date, nil, &bad, nil)
+}
+
+// SetJournalImportant writes only the day's important note.
+func (s *Store) SetJournalImportant(ctx context.Context, date, important string) error {
+	return s.SetJournalFields(ctx, date, nil, nil, &important)
 }
 
 func (s *Store) journalDay(ctx context.Context, date string) JournalEntry {
 	var e JournalEntry
-	_ = s.DB.QueryRowContext(ctx, `SELECT text, bad_text FROM journal WHERE date = ?`, date).Scan(&e.Text, &e.Bad)
+	_ = s.DB.QueryRowContext(ctx, `SELECT text, bad_text, important FROM journal WHERE date = ?`, date).Scan(&e.Text, &e.Bad, &e.Important)
 	return e
 }
 
@@ -55,9 +72,9 @@ func (s *Store) Journal(ctx context.Context, from, to string) (map[string]string
 	return out, nil
 }
 
-// JournalFull returns both lines by date for a range.
+// JournalFull returns every field by date for a range.
 func (s *Store) JournalFull(ctx context.Context, from, to string) (map[string]JournalEntry, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT date, text, bad_text FROM journal WHERE date BETWEEN ? AND ? ORDER BY date`, from, to)
+	rows, err := s.DB.QueryContext(ctx, `SELECT date, text, bad_text, important FROM journal WHERE date BETWEEN ? AND ? ORDER BY date`, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +83,7 @@ func (s *Store) JournalFull(ctx context.Context, from, to string) (map[string]Jo
 	for rows.Next() {
 		var d string
 		var e JournalEntry
-		if err := rows.Scan(&d, &e.Text, &e.Bad); err != nil {
+		if err := rows.Scan(&d, &e.Text, &e.Bad, &e.Important); err != nil {
 			return nil, err
 		}
 		out[d] = e
