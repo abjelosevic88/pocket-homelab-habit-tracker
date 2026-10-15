@@ -176,6 +176,7 @@ input.num { width: 90px; text-align: right; }
 
 /* ---- the month page ---- */
 .grid-scroll { overflow-x: auto; }
+.month-sheet { width: max-content; min-width: 100%; }
 .habit-grid { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .habit-grid th, .habit-grid td { padding: 0; }
 .habit-grid .name-col { width: 160px; min-width: 160px; position: sticky; left: 0; background: var(--surface); z-index: 2; text-align: left; border-right: 1px solid var(--border); }

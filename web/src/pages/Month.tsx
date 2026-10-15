@@ -67,14 +67,18 @@ export default function Month() {
       />
 
       <Card flush className="mb">
-        {data.habits.length === 0
-          ? <div className="pad"><Empty title="No habits on this page yet">Pick up to seven things you want to do (or avoid) this month. <Link to="/manage">Add habits →</Link></Empty></div>
-          : <HabitGrid days={data.days} habits={data.habits} onCycle={cycle} onEdit={h => navigate(`/manage?habit=${h.id}`)} weather={settings?.weather_enabled ? data.weather : null} units={settings?.weather_units} onWeather={(day, w) => setWx({ day, w })} important={data.important} onDay={setImp} />}
-        {data.trackers.length > 0 && (
-          <div className="trackers">
-            {data.trackers.map(t => <TrackerChart key={t.id} days={data.days} tracker={t} onSet={setValue} />)}
+        {data.habits.length === 0 && <div className="pad"><Empty title="No habits on this page yet">Pick up to seven things you want to do (or avoid) this month. <Link to="/manage">Add habits →</Link></Empty></div>}
+        {/* one scroller for the grid and the charts, so the days stay in line on a phone */}
+        <div className="grid-scroll">
+          <div className="month-sheet">
+            {data.habits.length > 0 && <HabitGrid days={data.days} habits={data.habits} onCycle={cycle} onEdit={h => navigate(`/manage?habit=${h.id}`)} weather={settings?.weather_enabled ? data.weather : null} units={settings?.weather_units} onWeather={(day, w) => setWx({ day, w })} important={data.important} onDay={setImp} />}
+            {data.trackers.length > 0 && (
+              <div className="trackers">
+                {data.trackers.map(t => <TrackerChart key={t.id} days={data.days} tracker={t} onSet={setValue} />)}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </Card>
 
       <ImportantDays page={data} onOpen={setImp} />
