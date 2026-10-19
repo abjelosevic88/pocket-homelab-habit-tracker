@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -209,7 +210,8 @@ func (s *Server) handleSetHabitEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "cannot mark a day in the future")
 		return
 	}
-	if _, err := s.store.GetHabit(r.Context(), idParam(r, "id")); err != nil {
+	h, err := s.store.GetHabit(r.Context(), idParam(r, "id"))
+	if err != nil {
 		s.fail(w, err, "get habit")
 		return
 	}
@@ -224,11 +226,18 @@ func (s *Server) handleSetHabitEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "status must be 1 (done), -1 (missed) or 0 (clear)")
 		return
 	}
-	if err := s.store.SetHabitEntry(r.Context(), idParam(r, "id"), date, in.Status); err != nil {
+	if err := s.store.SetHabitEntry(r.Context(), h.ID, date, in.Status); err != nil {
 		s.fail(w, err, "set entry")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"habit_id": idParam(r, "id"), "date": date, "status": in.Status})
+	topic := "habits.marked"
+	if in.Status == 0 {
+		topic = "habits.unmarked"
+	}
+	s.publish(topic, fmt.Sprintf("habit:%d", h.ID), map[string]any{
+		"habit_id": h.ID, "habit": h.Name, "date": date, "status": in.Status,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{"habit_id": h.ID, "date": date, "status": in.Status})
 }
 
 func (s *Server) handleClearHabitEntry(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +250,9 @@ func (s *Server) handleClearHabitEntry(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "clear entry")
 		return
 	}
+	s.publish("habits.unmarked", fmt.Sprintf("habit:%d", idParam(r, "id")), map[string]any{
+		"habit_id": idParam(r, "id"), "date": date, "status": 0,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -486,6 +498,11 @@ func (s *Server) handleSetTrackerEntry(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetTrackerEntry(r.Context(), t.ID, date, in.Value); err != nil {
 		s.fail(w, err, "set value")
 		return
+	}
+	if in.Value != nil {
+		s.publish("habits.tracked", fmt.Sprintf("tracker:%d", t.ID), map[string]any{
+			"tracker_id": t.ID, "tracker": t.Name, "kind": t.Kind, "unit": t.Unit, "date": date, "value": *in.Value,
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tracker_id": t.ID, "date": date, "value": in.Value})
 }

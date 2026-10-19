@@ -17,6 +17,8 @@ All settings are environment variables. Nothing is required.
 | `TRUST_PROXY` | `true` | Honour `X-Forwarded-For` / `X-Real-IP` for logging. |
 | `METRICS_ENABLED` | `true` | Serve Prometheus metrics on `/metrics` (unauthenticated — restrict at the proxy if exposed). |
 | `SCHEDULER_ENABLED` | `true` | Run the once-a-minute reminder scheduler. |
+| `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `habits.marked` / `habits.unmarked` / `habits.tracked` / `habits.checkin`, and accept the tokens Core hands to paired phones. |
+| `CORE_APP_URL` | `BASE_URL` | How Core reaches this app for health checks (e.g. `http://host.docker.internal:8169`). |
 | `DEMO_DATA` | `false` | Seed seven habits and ~70 days of history into an *empty* database. |
 
 ## Authentication

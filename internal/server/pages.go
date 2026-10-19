@@ -115,6 +115,9 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "load day")
 		return
 	}
+	s.publish("habits.checkin", "day:"+in.Date, map[string]any{
+		"date": in.Date, "habits": len(in.Habits), "trackers": len(in.Trackers), "journal": in.Journal != nil || in.Bad != nil || in.Important != nil,
+	})
 	writeJSON(w, http.StatusOK, page)
 }
 

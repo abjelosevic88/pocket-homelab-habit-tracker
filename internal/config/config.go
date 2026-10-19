@@ -34,7 +34,14 @@ type Config struct {
 	AdminName            string
 
 	SchedulerEnabled bool
-	DemoData         bool
+
+	// Pocket Core: when CORE_URL is set the app registers itself on start,
+	// publishes events and accepts the tokens Core hands to paired phones.
+	CoreURL             string
+	CoreRegistrationKey string
+	CoreAppURL          string // how Core reaches this app; defaults to BASE_URL
+
+	DemoData bool
 }
 
 func env(key, def string) string {
@@ -96,7 +103,15 @@ func Load() (*Config, error) {
 		AdminName:            env("ADMIN_NAME", "Admin"),
 
 		SchedulerEnabled: envBool("SCHEDULER_ENABLED", true),
-		DemoData:         envBool("DEMO_DATA", false),
+
+		CoreURL:             strings.TrimRight(env("CORE_URL", ""), "/"),
+		CoreRegistrationKey: env("CORE_REGISTRATION_KEY", ""),
+		CoreAppURL:          strings.TrimRight(env("CORE_APP_URL", ""), "/"),
+
+		DemoData: envBool("DEMO_DATA", false),
+	}
+	if c.CoreAppURL == "" {
+		c.CoreAppURL = c.BaseURL
 	}
 	switch c.AuthMode {
 	case "local", "proxy", "none":
