@@ -75,44 +75,62 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 		if err := s.store.CreateUser(ctx, u); err != nil {
 			return err
 		}
-		st, _ := s.store.GetSettings(ctx)
-		st.SetupComplete = true
-		if err := s.store.SaveSettings(ctx, st); err != nil {
+		if err := s.store.SetBoxSetting(ctx, "setup_complete", "1"); err != nil {
 			return err
 		}
 		s.log.Info("admin user created from environment", "email", u.Email)
 	}
-	st, err := s.store.GetSettings(ctx)
+	// Every account gets the notebook's default trackers (and the demo data when asked for)
+	// once, in its own dataset.
+	users, err := s.store.ListUsers(ctx)
 	if err != nil {
 		return err
 	}
-	if !st.DefaultsSeeded {
-		// The notebook's three bottom rows: sleep, day rating, weight.
-		defaults := []store.Tracker{
-			{Name: "Sleep score", Kind: "scale", MinValue: 1, MaxValue: 5, Step: 1, HigherIsBetter: true},
-			{Name: "Day rating", Kind: "scale", MinValue: 1, MaxValue: 5, Step: 1, HigherIsBetter: true},
-			{Name: "Weight", Kind: "number", MinValue: 0, MaxValue: 0, Step: 0.1, Unit: "kg", HigherIsBetter: false},
-		}
-		first := time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02")
-		for i := range defaults {
-			defaults[i].StartDate = first
-			if err := s.store.CreateTracker(ctx, &defaults[i]); err != nil {
-				return err
-			}
-		}
-		st.DefaultsSeeded = true
-		if err := s.store.SaveSettings(ctx, st); err != nil {
-			return err
-		}
-	}
-	if s.cfg.DemoData {
-		if err := s.seedDemo(ctx); err != nil {
+	for i := range users {
+		if err := s.setupUser(ctx, &users[i]); err != nil {
 			return err
 		}
 	}
 	_ = s.store.PurgeSessions(ctx)
 	if s.core.Configured() {
 		go s.coreLoop(ctx)
+	}
+	return nil
+}
+
+// setupUser seeds a user's own dataset once: the notebook's three bottom rows (sleep, day
+// rating, weight) and, with DEMO_DATA, the demo history.
+func (s *Server) setupUser(ctx context.Context, u *store.User) error {
+	st, err := s.store.GetSettings(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	if !st.DefaultsSeeded {
+		if err := s.seedDefaultTrackers(ctx, u.ID); err != nil {
+			return err
+		}
+		if err := s.store.SetSetting(ctx, u.ID, "defaults_seeded", "1"); err != nil {
+			return err
+		}
+	}
+	if s.cfg.DemoData {
+		return s.seedDemo(ctx, u.ID) // a no-op once the user has habits
+	}
+	return nil
+}
+
+func (s *Server) seedDefaultTrackers(ctx context.Context, uid int64) error {
+	defaults := []store.Tracker{
+		{Name: "Sleep score", Kind: "scale", MinValue: 1, MaxValue: 5, Step: 1, HigherIsBetter: true},
+		{Name: "Day rating", Kind: "scale", MinValue: 1, MaxValue: 5, Step: 1, HigherIsBetter: true},
+		{Name: "Weight", Kind: "number", MinValue: 0, MaxValue: 0, Step: 0.1, Unit: "kg", HigherIsBetter: false},
+	}
+	first := time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02")
+	for i := range defaults {
+		defaults[i].StartDate = first
+		if err := s.store.CreateTracker(ctx, uid, &defaults[i]); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -320,11 +338,14 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 	return nil
 }
 
-// publish sends an event to Core without blocking the request.
-func (s *Server) publish(topic, subject string, payload map[string]any) {
-	if !s.core.Configured() {
+// publish sends an event to Core without blocking the request. Every event names the person
+// it is about (the account's email, which is how Core and the sibling apps know people), so a
+// consumer files it under that person and nobody else.
+func (s *Server) publish(u *store.User, topic, subject string, payload map[string]any) {
+	if !s.core.Configured() || u == nil {
 		return
 	}
+	payload["user"] = u.Email
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -370,8 +391,9 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	counts := s.store.Counts(ctx)
-	d, _ := s.store.DashboardStats(ctx)
+	// Box-wide row counts only: the metrics endpoint is unauthenticated and nobody's
+	// habits are anybody else's business.
+	counts := s.store.Counts(ctx, 0)
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	fmt.Fprintf(w, "# HELP pocket_habits_info Build info.\n# TYPE pocket_habits_info gauge\npocket_habits_info{version=%q} 1\n", Version)
 	fmt.Fprintf(w, "# HELP pocket_habits_uptime_seconds Process uptime.\n# TYPE pocket_habits_uptime_seconds gauge\npocket_habits_uptime_seconds %d\n", int(time.Since(s.started).Seconds()))
@@ -379,13 +401,6 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# HELP pocket_habits_http_errors_total HTTP 5xx responses.\n# TYPE pocket_habits_http_errors_total counter\npocket_habits_http_errors_total %d\n", s.errors.Load())
 	for k, v := range counts {
 		fmt.Fprintf(w, "# TYPE pocket_habits_rows{table=%q} gauge\npocket_habits_rows{table=%q} %d\n", k, k, v)
-	}
-	if d != nil {
-		fmt.Fprintf(w, "# HELP pocket_habits_today_done Habits done today.\n# TYPE pocket_habits_today_done gauge\npocket_habits_today_done %d\n", d.TodayDone)
-		fmt.Fprintf(w, "# HELP pocket_habits_today_total Habits scheduled today.\n# TYPE pocket_habits_today_total gauge\npocket_habits_today_total %d\n", d.TodayTotal)
-		fmt.Fprintf(w, "# HELP pocket_habits_month_done Habits done this month.\n# TYPE pocket_habits_month_done gauge\npocket_habits_month_done %d\n", d.MonthDone)
-		fmt.Fprintf(w, "# HELP pocket_habits_month_missed Habits missed this month.\n# TYPE pocket_habits_month_missed gauge\npocket_habits_month_missed %d\n", d.MonthMissed)
-		fmt.Fprintf(w, "# HELP pocket_habits_perfect_streak Consecutive all-green days.\n# TYPE pocket_habits_perfect_streak gauge\npocket_habits_perfect_streak %d\n", d.PerfectStreak)
 	}
 }
 

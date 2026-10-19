@@ -46,7 +46,7 @@ func endOfMonth(date string) string {
 
 func (s *Server) handleListHabits(w http.ResponseWriter, r *http.Request) {
 	all := r.URL.Query().Get("all") == "1" || r.URL.Query().Get("all") == "true"
-	h, err := s.store.ListHabits(r.Context(), r.URL.Query().Get("month"), all)
+	h, err := s.store.ListHabits(r.Context(), me(r), r.URL.Query().Get("month"), all)
 	if err != nil {
 		s.fail(w, err, "list habits")
 		return
@@ -55,7 +55,7 @@ func (s *Server) handleListHabits(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetHabit(w http.ResponseWriter, r *http.Request) {
-	h, err := s.store.GetHabit(r.Context(), idParam(r, "id"))
+	h, err := s.store.GetHabit(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get habit")
 		return
@@ -98,7 +98,7 @@ func (s *Server) handleCreateHabit(w http.ResponseWriter, r *http.Request) {
 	if in.EndDate != nil && *in.EndDate != "" {
 		h.EndDate = in.EndDate
 	}
-	if err := s.store.CreateHabit(r.Context(), h); err != nil {
+	if err := s.store.CreateHabit(r.Context(), me(r), h); err != nil {
 		s.fail(w, err, "create habit")
 		return
 	}
@@ -106,7 +106,7 @@ func (s *Server) handleCreateHabit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateHabit(w http.ResponseWriter, r *http.Request) {
-	h, err := s.store.GetHabit(r.Context(), idParam(r, "id"))
+	h, err := s.store.GetHabit(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get habit")
 		return
@@ -129,7 +129,7 @@ func (s *Server) handleUpdateHabit(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.EndDate = in.EndDate
 	}
-	if err := s.store.UpdateHabit(r.Context(), h); err != nil {
+	if err := s.store.UpdateHabit(r.Context(), me(r), h); err != nil {
 		s.fail(w, err, "update habit")
 		return
 	}
@@ -137,7 +137,7 @@ func (s *Server) handleUpdateHabit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteHabit(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.DeleteHabit(r.Context(), idParam(r, "id")); err != nil {
+	if err := s.store.DeleteHabit(r.Context(), me(r), idParam(r, "id")); err != nil {
 		s.fail(w, err, "delete habit")
 		return
 	}
@@ -147,7 +147,7 @@ func (s *Server) handleDeleteHabit(w http.ResponseWriter, r *http.Request) {
 // handleEndHabit retires a habit at the end of the given month (default: current) —
 // it stays on that month's page and disappears from the next one.
 func (s *Server) handleEndHabit(w http.ResponseWriter, r *http.Request) {
-	h, err := s.store.GetHabit(r.Context(), idParam(r, "id"))
+	h, err := s.store.GetHabit(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get habit")
 		return
@@ -164,7 +164,7 @@ func (s *Server) handleEndHabit(w http.ResponseWriter, r *http.Request) {
 		end = h.StartDate
 	}
 	h.EndDate = &end
-	if err := s.store.UpdateHabit(r.Context(), h); err != nil {
+	if err := s.store.UpdateHabit(r.Context(), me(r), h); err != nil {
 		s.fail(w, err, "end habit")
 		return
 	}
@@ -172,13 +172,13 @@ func (s *Server) handleEndHabit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleResumeHabit(w http.ResponseWriter, r *http.Request) {
-	h, err := s.store.GetHabit(r.Context(), idParam(r, "id"))
+	h, err := s.store.GetHabit(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get habit")
 		return
 	}
 	h.EndDate = nil
-	if err := s.store.UpdateHabit(r.Context(), h); err != nil {
+	if err := s.store.UpdateHabit(r.Context(), me(r), h); err != nil {
 		s.fail(w, err, "resume habit")
 		return
 	}
@@ -193,7 +193,7 @@ func (s *Server) handleReorderHabits(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	if err := s.store.ReorderHabits(r.Context(), in.IDs); err != nil {
+	if err := s.store.ReorderHabits(r.Context(), me(r), in.IDs); err != nil {
 		s.fail(w, err, "reorder habits")
 		return
 	}
@@ -210,7 +210,7 @@ func (s *Server) handleSetHabitEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "cannot mark a day in the future")
 		return
 	}
-	h, err := s.store.GetHabit(r.Context(), idParam(r, "id"))
+	h, err := s.store.GetHabit(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get habit")
 		return
@@ -226,7 +226,7 @@ func (s *Server) handleSetHabitEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "status must be 1 (done), -1 (missed) or 0 (clear)")
 		return
 	}
-	if err := s.store.SetHabitEntry(r.Context(), h.ID, date, in.Status); err != nil {
+	if err := s.store.SetHabitEntry(r.Context(), me(r), h.ID, date, in.Status); err != nil {
 		s.fail(w, err, "set entry")
 		return
 	}
@@ -234,7 +234,7 @@ func (s *Server) handleSetHabitEntry(w http.ResponseWriter, r *http.Request) {
 	if in.Status == 0 {
 		topic = "habits.unmarked"
 	}
-	s.publish(topic, fmt.Sprintf("habit:%d", h.ID), map[string]any{
+	s.publish(userFrom(r.Context()), topic, fmt.Sprintf("habit:%d", h.ID), map[string]any{
 		"habit_id": h.ID, "habit": h.Name, "date": date, "status": in.Status,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"habit_id": h.ID, "date": date, "status": in.Status})
@@ -246,11 +246,11 @@ func (s *Server) handleClearHabitEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "date must be YYYY-MM-DD")
 		return
 	}
-	if err := s.store.SetHabitEntry(r.Context(), idParam(r, "id"), date, 0); err != nil {
+	if err := s.store.SetHabitEntry(r.Context(), me(r), idParam(r, "id"), date, 0); err != nil {
 		s.fail(w, err, "clear entry")
 		return
 	}
-	s.publish("habits.unmarked", fmt.Sprintf("habit:%d", idParam(r, "id")), map[string]any{
+	s.publish(userFrom(r.Context()), "habits.unmarked", fmt.Sprintf("habit:%d", idParam(r, "id")), map[string]any{
 		"habit_id": idParam(r, "id"), "date": date, "status": 0,
 	})
 	w.WriteHeader(http.StatusNoContent)
@@ -260,7 +260,7 @@ func (s *Server) handleClearHabitEntry(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListTrackers(w http.ResponseWriter, r *http.Request) {
 	all := r.URL.Query().Get("all") == "1" || r.URL.Query().Get("all") == "true"
-	t, err := s.store.ListTrackers(r.Context(), r.URL.Query().Get("month"), all)
+	t, err := s.store.ListTrackers(r.Context(), me(r), r.URL.Query().Get("month"), all)
 	if err != nil {
 		s.fail(w, err, "list trackers")
 		return
@@ -269,7 +269,7 @@ func (s *Server) handleListTrackers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetTracker(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.GetTracker(r.Context(), idParam(r, "id"))
+	t, err := s.store.GetTracker(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get tracker")
 		return
@@ -377,7 +377,7 @@ func (s *Server) handleCreateTracker(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.store.CreateTracker(r.Context(), t); err != nil {
+	if err := s.store.CreateTracker(r.Context(), me(r), t); err != nil {
 		s.fail(w, err, "create tracker")
 		return
 	}
@@ -385,7 +385,7 @@ func (s *Server) handleCreateTracker(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateTracker(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.GetTracker(r.Context(), idParam(r, "id"))
+	t, err := s.store.GetTracker(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get tracker")
 		return
@@ -399,7 +399,7 @@ func (s *Server) handleUpdateTracker(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.store.UpdateTracker(r.Context(), t); err != nil {
+	if err := s.store.UpdateTracker(r.Context(), me(r), t); err != nil {
 		s.fail(w, err, "update tracker")
 		return
 	}
@@ -407,7 +407,7 @@ func (s *Server) handleUpdateTracker(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteTracker(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.DeleteTracker(r.Context(), idParam(r, "id")); err != nil {
+	if err := s.store.DeleteTracker(r.Context(), me(r), idParam(r, "id")); err != nil {
 		s.fail(w, err, "delete tracker")
 		return
 	}
@@ -415,7 +415,7 @@ func (s *Server) handleDeleteTracker(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEndTracker(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.GetTracker(r.Context(), idParam(r, "id"))
+	t, err := s.store.GetTracker(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get tracker")
 		return
@@ -429,7 +429,7 @@ func (s *Server) handleEndTracker(w http.ResponseWriter, r *http.Request) {
 		end = t.StartDate
 	}
 	t.EndDate = &end
-	if err := s.store.UpdateTracker(r.Context(), t); err != nil {
+	if err := s.store.UpdateTracker(r.Context(), me(r), t); err != nil {
 		s.fail(w, err, "end tracker")
 		return
 	}
@@ -437,13 +437,13 @@ func (s *Server) handleEndTracker(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleResumeTracker(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.GetTracker(r.Context(), idParam(r, "id"))
+	t, err := s.store.GetTracker(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get tracker")
 		return
 	}
 	t.EndDate = nil
-	if err := s.store.UpdateTracker(r.Context(), t); err != nil {
+	if err := s.store.UpdateTracker(r.Context(), me(r), t); err != nil {
 		s.fail(w, err, "resume tracker")
 		return
 	}
@@ -458,7 +458,7 @@ func (s *Server) handleReorderTrackers(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	if err := s.store.ReorderTrackers(r.Context(), in.IDs); err != nil {
+	if err := s.store.ReorderTrackers(r.Context(), me(r), in.IDs); err != nil {
 		s.fail(w, err, "reorder trackers")
 		return
 	}
@@ -475,7 +475,7 @@ func (s *Server) handleSetTrackerEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "cannot record a day in the future")
 		return
 	}
-	t, err := s.store.GetTracker(r.Context(), idParam(r, "id"))
+	t, err := s.store.GetTracker(r.Context(), me(r), idParam(r, "id"))
 	if err != nil {
 		s.fail(w, err, "get tracker")
 		return
@@ -495,12 +495,12 @@ func (s *Server) handleSetTrackerEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "value must be 1 (yes) or 0 (no)")
 		return
 	}
-	if err := s.store.SetTrackerEntry(r.Context(), t.ID, date, in.Value); err != nil {
+	if err := s.store.SetTrackerEntry(r.Context(), me(r), t.ID, date, in.Value); err != nil {
 		s.fail(w, err, "set value")
 		return
 	}
 	if in.Value != nil {
-		s.publish("habits.tracked", fmt.Sprintf("tracker:%d", t.ID), map[string]any{
+		s.publish(userFrom(r.Context()), "habits.tracked", fmt.Sprintf("tracker:%d", t.ID), map[string]any{
 			"tracker_id": t.ID, "tracker": t.Name, "kind": t.Kind, "unit": t.Unit, "date": date, "value": *in.Value,
 		})
 	}
@@ -513,7 +513,7 @@ func (s *Server) handleClearTrackerEntry(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusBadRequest, "date must be YYYY-MM-DD")
 		return
 	}
-	if err := s.store.SetTrackerEntry(r.Context(), idParam(r, "id"), date, nil); err != nil {
+	if err := s.store.SetTrackerEntry(r.Context(), me(r), idParam(r, "id"), date, nil); err != nil {
 		s.fail(w, err, "clear value")
 		return
 	}

@@ -21,7 +21,7 @@ import (
 var timeRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	st, err := s.store.GetSettings(r.Context())
+	st, err := s.store.GetSettings(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "settings")
 		return
@@ -29,8 +29,11 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, st)
 }
 
+// handlePutSettings saves the caller's own settings. The app title is box-wide: only an admin
+// changes it, a member's value is ignored.
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
-	cur, err := s.store.GetSettings(r.Context())
+	uid := me(r)
+	cur, err := s.store.GetSettings(r.Context(), uid)
 	if err != nil {
 		s.fail(w, err, "settings")
 		return
@@ -55,8 +58,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		in.ReminderFormat = "ntfy"
 	}
-	if strings.TrimSpace(in.Title) == "" {
+	in.Title = strings.TrimSpace(in.Title)
+	if in.Title == "" {
 		in.Title = "Pocket Habits"
+	}
+	if !userFrom(r.Context()).IsAdmin() {
+		in.Title = cur.Title
 	}
 	if strings.TrimSpace(in.JournalPrompt) == "" {
 		in.JournalPrompt = "What was great about today?"
@@ -83,9 +90,15 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if moved || (in.WeatherEnabled && !cur.WeatherEnabled) {
 		in.WeatherLast = ""
 	}
-	if err := s.store.SaveSettings(r.Context(), in); err != nil {
+	if err := s.store.SaveSettings(r.Context(), uid, in); err != nil {
 		s.fail(w, err, "save settings")
 		return
+	}
+	if in.Title != cur.Title {
+		if err := s.store.SetBoxSetting(r.Context(), "title", in.Title); err != nil {
+			s.fail(w, err, "save settings")
+			return
+		}
 	}
 	if in.WeatherEnabled && (moved || !cur.WeatherEnabled) {
 		// Fetch the recent days right away so the pages show something; the rest trickles in.
@@ -93,8 +106,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 			from := time.Now().AddDate(0, 0, -45).Format("2006-01-02")
-			if _, err := s.refreshWeather(ctx, in, from, store.Today()); err != nil {
-				s.log.Warn("weather first fetch failed", "err", err)
+			if _, err := s.refreshWeather(ctx, uid, in, from, store.Today()); err != nil {
+				s.log.Warn("weather first fetch failed", "user", uid, "err", err)
 			}
 		}()
 	}
@@ -102,6 +115,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
+	users, _ := s.store.CountUsers(r.Context())
 	var size int64
 	if fi, err := os.Stat(s.cfg.DBPath); err == nil {
 		size = fi.Size()
@@ -111,7 +125,8 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 		"core":      s.coreStatus(),
 		"auth_mode": s.cfg.AuthMode, "data_dir": s.cfg.DataDir, "db_path": s.cfg.DBPath, "db_bytes": size,
 		"uptime": time.Since(s.started).Round(time.Second).String(), "timezone": time.Now().Location().String(),
-		"scheduler": s.cfg.SchedulerEnabled, "counts": s.store.Counts(r.Context()),
+		"scheduler": s.cfg.SchedulerEnabled, "counts": s.store.Counts(r.Context(), me(r)), // your own rows
+		"db_download": userFrom(r.Context()).IsAdmin() && users <= 1, // see handleBackup
 	})
 }
 
@@ -124,11 +139,23 @@ func (s *Server) coreStatus() map[string]any {
 
 // ---------- reminders ----------
 
-// RunScheduler is called every minute: it sends the nightly reminder once per
-// day at the configured time when something is still unmarked.
+// RunScheduler is called every minute: for each person it refreshes their weather and sends
+// their nightly reminder (to their own endpoint, about their own habits) once per day at the
+// time they set, when something is still unmarked.
 func (s *Server) RunScheduler(ctx context.Context) {
-	s.RunWeather(ctx)
-	st, err := s.store.GetSettings(ctx)
+	users, err := s.store.ListUsers(ctx)
+	if err != nil {
+		s.log.Warn("scheduler: list users", "err", err)
+		return
+	}
+	for _, u := range users {
+		s.RunWeather(ctx, u.ID)
+		s.runReminder(ctx, u.ID)
+	}
+}
+
+func (s *Server) runReminder(ctx context.Context, uid int64) {
+	st, err := s.store.GetSettings(ctx, uid)
 	if err != nil || st.ReminderTime == "" || st.ReminderURL == "" {
 		return
 	}
@@ -137,7 +164,7 @@ func (s *Server) RunScheduler(ctx context.Context) {
 	if st.ReminderLast == today || now.Format("15:04") < st.ReminderTime {
 		return
 	}
-	day, err := s.store.Day(ctx, today)
+	day, err := s.store.Day(ctx, uid, today)
 	if err != nil {
 		return
 	}
@@ -150,7 +177,7 @@ func (s *Server) RunScheduler(ctx context.Context) {
 	}
 	// mark as sent first so a failing endpoint does not retry every minute
 	st.ReminderLast = today
-	_ = s.store.SetSetting(ctx, "reminder_last", today)
+	_ = s.store.SetSetting(ctx, uid, "reminder_last", today)
 	if unmarked == 0 && day.Journal != "" {
 		return
 	}
@@ -218,7 +245,19 @@ func (s *Server) handleTestReminder(w http.ResponseWriter, r *http.Request) {
 
 // ---------- backup / export / import ----------
 
+// handleBackup downloads the whole SQLite file. That file holds everybody's data, so it is
+// only offered to the admin of a box nobody else has an account on; with more people the
+// admin gets no more than anyone else (their own export) and the operator backs the box up
+// on the host (`pocket-habits backup`, or the data volume).
 func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
+	if !userFrom(r.Context()).IsAdmin() {
+		writeErr(w, http.StatusForbidden, "only an admin can download the database")
+		return
+	}
+	if n, err := s.store.CountUsers(r.Context()); err != nil || n > 1 {
+		writeErr(w, http.StatusForbidden, "the database holds other people's data too: use Export JSON for your own, or back the box up on the host (pocket-habits backup)")
+		return
+	}
 	dir := filepath.Join(s.cfg.DataDir, "backups")
 	name := fmt.Sprintf("pocket-habits-%s.db", time.Now().Format("20060102-150405"))
 	dst := filepath.Join(dir, name)
@@ -257,28 +296,29 @@ type trackerEntryRow struct {
 	Value     float64 `json:"value"`
 }
 
-func (s *Server) buildExport(ctx context.Context) (*Export, error) {
-	st, err := s.store.GetSettings(ctx)
+// buildExport is the user's own data: their settings, habits, trackers, entries and journal.
+func (s *Server) buildExport(ctx context.Context, uid int64) (*Export, error) {
+	st, err := s.store.GetSettings(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
-	habits, err := s.store.ListHabits(ctx, "", true)
+	habits, err := s.store.ListHabits(ctx, uid, "", true)
 	if err != nil {
 		return nil, err
 	}
-	trackers, err := s.store.ListTrackers(ctx, "", true)
+	trackers, err := s.store.ListTrackers(ctx, uid, "", true)
 	if err != nil {
 		return nil, err
 	}
-	he, err := s.store.HabitEntries(ctx, "0000-01-01", "9999-12-31")
+	he, err := s.store.HabitEntries(ctx, uid, "0000-01-01", "9999-12-31")
 	if err != nil {
 		return nil, err
 	}
-	te, err := s.store.TrackerEntries(ctx, "0000-01-01", "9999-12-31")
+	te, err := s.store.TrackerEntries(ctx, uid, "0000-01-01", "9999-12-31")
 	if err != nil {
 		return nil, err
 	}
-	j, err := s.store.JournalFull(ctx, "0000-01-01", "9999-12-31")
+	j, err := s.store.JournalFull(ctx, uid, "0000-01-01", "9999-12-31")
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +342,7 @@ func (s *Server) buildExport(ctx context.Context) (*Export, error) {
 }
 
 func (s *Server) handleExportJSON(w http.ResponseWriter, r *http.Request) {
-	ex, err := s.buildExport(r.Context())
+	ex, err := s.buildExport(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "export")
 		return
@@ -313,7 +353,7 @@ func (s *Server) handleExportJSON(w http.ResponseWriter, r *http.Request) {
 
 // handleExportCSV writes one long-format table: date,type,id,name,value.
 func (s *Server) handleExportCSV(w http.ResponseWriter, r *http.Request) {
-	ex, err := s.buildExport(r.Context())
+	ex, err := s.buildExport(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "export")
 		return
@@ -362,8 +402,9 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	existingH, _ := s.store.ListHabits(ctx, "", true)
-	existingT, _ := s.store.ListTrackers(ctx, "", true)
+	uid := me(r)
+	existingH, _ := s.store.ListHabits(ctx, uid, "", true)
+	existingT, _ := s.store.ListTrackers(ctx, uid, "", true)
 	hmap := map[int64]int64{}
 	tmap := map[int64]int64{}
 	created := 0
@@ -378,7 +419,7 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		if id == 0 {
 			nh := h
 			nh.ID = 0
-			if err := s.store.CreateHabit(ctx, &nh); err != nil {
+			if err := s.store.CreateHabit(ctx, uid, &nh); err != nil {
 				s.fail(w, err, "import habit")
 				return
 			}
@@ -398,7 +439,7 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		if id == 0 {
 			nt := t
 			nt.ID = 0
-			if err := s.store.CreateTracker(ctx, &nt); err != nil {
+			if err := s.store.CreateTracker(ctx, uid, &nt); err != nil {
 				s.fail(w, err, "import tracker")
 				return
 			}
@@ -410,7 +451,7 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 	n := 0
 	for _, e := range ex.HabitEntries {
 		if id, ok := hmap[e.HabitID]; ok && validDate(e.Date) {
-			if err := s.store.SetHabitEntry(ctx, id, e.Date, e.Status); err == nil {
+			if err := s.store.SetHabitEntry(ctx, uid, id, e.Date, e.Status); err == nil {
 				n++
 			}
 		}
@@ -418,7 +459,7 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 	for _, e := range ex.TrackerEntries {
 		if id, ok := tmap[e.TrackerID]; ok && validDate(e.Date) {
 			v := e.Value
-			if err := s.store.SetTrackerEntry(ctx, id, e.Date, &v); err == nil {
+			if err := s.store.SetTrackerEntry(ctx, uid, id, e.Date, &v); err == nil {
 				n++
 			}
 		}
@@ -426,7 +467,7 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 	for _, j := range ex.Journal {
 		if validDate(j.Date) && (j.Text != "" || j.Bad != "" || j.Important != "") {
 			text, bad, important := j.Text, j.Bad, j.Important
-			if err := s.store.SetJournalFields(ctx, j.Date, &text, &bad, &important); err == nil {
+			if err := s.store.SetJournalFields(ctx, uid, j.Date, &text, &bad, &important); err == nil {
 				n++
 			}
 		}

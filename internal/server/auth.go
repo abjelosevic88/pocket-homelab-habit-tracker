@@ -23,6 +23,15 @@ func userFrom(ctx context.Context) *store.User {
 	return u
 }
 
+// me is the signed-in user's id: every content query is scoped by it. Sessions, API
+// tokens, Pocket Core tokens and OIDC sign-ins all resolve to a local user first.
+func me(r *http.Request) int64 {
+	if u := userFrom(r.Context()); u != nil {
+		return u.ID
+	}
+	return -1 // never matches a row
+}
+
 // requireAuth resolves the current user from a session cookie, bearer token,
 // or trusted proxy header depending on AUTH_MODE.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
@@ -92,11 +101,20 @@ func (s *Server) firstOrSystemUser(ctx context.Context, email, name string) (*st
 	if u, err := s.store.GetUserByEmail(ctx, email); err == nil {
 		return u, nil
 	}
-	u := &store.User{Email: email, Name: name, Role: "admin"}
+	// The first account on the box is its owner (admin); everyone after is a member with
+	// their own, empty dataset.
+	role := "member"
+	if n, err := s.store.CountUsers(ctx); err == nil && n == 0 {
+		role = "admin"
+	}
+	u := &store.User{Email: email, Name: name, Role: role}
 	if err := s.store.CreateUser(ctx, u); err != nil {
 		return nil, err
 	}
-	s.log.Info("auto-provisioned user", "email", email, "mode", s.cfg.AuthMode)
+	s.log.Info("auto-provisioned user", "email", email, "role", role, "mode", s.cfg.AuthMode)
+	if err := s.setupUser(ctx, u); err != nil {
+		s.log.Warn("seeding the new user's defaults failed", "email", email, "err", err)
+	}
 	return u, nil
 }
 
@@ -113,7 +131,6 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "count users")
 		return
 	}
-	st, _ := s.store.GetSettings(r.Context())
 	u, _ := s.resolveUser(r)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"needs_setup":   n == 0 && s.cfg.AuthMode == "local",
@@ -121,7 +138,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		"authenticated": u != nil,
 		"user":          u,
 		"version":       Version,
-		"title":         st.Title,
+		"title":         s.store.BoxTitle(r.Context()),
 		"oidc":          s.oidcEnabled() && s.cfg.AuthMode == "local",
 		"oidc_name":     s.oidcName(),
 	})
@@ -158,9 +175,11 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "create user")
 		return
 	}
-	st, _ := s.store.GetSettings(ctx)
-	st.SetupComplete = true
-	_ = s.store.SaveSettings(ctx, st)
+	_ = s.store.SetBoxSetting(ctx, "setup_complete", "1")
+	if err := s.setupUser(ctx, u); err != nil {
+		s.fail(w, err, "seed defaults")
+		return
+	}
 	id, err := s.store.CreateSession(ctx, u.ID, s.cfg.SessionTTL)
 	if err != nil {
 		s.fail(w, err, "create session")

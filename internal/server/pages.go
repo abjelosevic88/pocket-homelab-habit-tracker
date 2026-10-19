@@ -22,7 +22,7 @@ func (s *Server) handleMonth(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "month must be YYYY-MM")
 		return
 	}
-	page, err := s.store.Month(r.Context(), month)
+	page, err := s.store.Month(r.Context(), me(r), month)
 	if err != nil {
 		s.fail(w, err, "load month")
 		return
@@ -36,7 +36,7 @@ func (s *Server) handleDay(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "date must be YYYY-MM-DD")
 		return
 	}
-	page, err := s.store.Day(r.Context(), date)
+	page, err := s.store.Day(r.Context(), me(r), date)
 	if err != nil {
 		s.fail(w, err, "load day")
 		return
@@ -45,7 +45,7 @@ func (s *Server) handleDay(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleToday(w http.ResponseWriter, r *http.Request) {
-	page, err := s.store.Day(r.Context(), store.Today())
+	page, err := s.store.Day(r.Context(), me(r), store.Today())
 	if err != nil {
 		s.fail(w, err, "load today")
 		return
@@ -82,13 +82,14 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	uid := me(r)
 	for k, st := range in.Habits {
 		id, err := strconv.ParseInt(k, 10, 64)
 		if err != nil || (st != 1 && st != -1 && st != 0) {
 			writeErr(w, http.StatusBadRequest, "habits must map id -> 1 | -1 | 0")
 			return
 		}
-		if err := s.store.SetHabitEntry(ctx, id, in.Date, st); err != nil {
+		if err := s.store.SetHabitEntry(ctx, uid, id, in.Date, st); err != nil {
 			s.fail(w, err, "set habit")
 			return
 		}
@@ -99,30 +100,30 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "trackers must map id -> number | null")
 			return
 		}
-		if err := s.store.SetTrackerEntry(ctx, id, in.Date, v); err != nil {
+		if err := s.store.SetTrackerEntry(ctx, uid, id, in.Date, v); err != nil {
 			s.fail(w, err, "set tracker")
 			return
 		}
 	}
 	if in.Journal != nil || in.Bad != nil || in.Important != nil {
-		if err := s.store.SetJournalFields(ctx, in.Date, in.Journal, in.Bad, in.Important); err != nil {
+		if err := s.store.SetJournalFields(ctx, uid, in.Date, in.Journal, in.Bad, in.Important); err != nil {
 			s.fail(w, err, "set journal")
 			return
 		}
 	}
-	page, err := s.store.Day(ctx, in.Date)
+	page, err := s.store.Day(ctx, uid, in.Date)
 	if err != nil {
 		s.fail(w, err, "load day")
 		return
 	}
-	s.publish("habits.checkin", "day:"+in.Date, map[string]any{
+	s.publish(userFrom(r.Context()), "habits.checkin", "day:"+in.Date, map[string]any{
 		"date": in.Date, "habits": len(in.Habits), "trackers": len(in.Trackers), "journal": in.Journal != nil || in.Bad != nil || in.Important != nil,
 	})
 	writeJSON(w, http.StatusOK, page)
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	d, err := s.store.DashboardStats(r.Context())
+	d, err := s.store.DashboardStats(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "dashboard")
 		return
@@ -147,7 +148,7 @@ func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "from/to must be YYYY-MM-DD and from <= to")
 		return
 	}
-	ins, err := s.store.InsightsRange(r.Context(), from, to)
+	ins, err := s.store.InsightsRange(r.Context(), me(r), from, to)
 	if err != nil {
 		s.fail(w, err, "insights")
 		return
@@ -167,7 +168,7 @@ func (s *Server) handleJournal(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "from/to must be YYYY-MM-DD")
 		return
 	}
-	j, err := s.store.Journal(r.Context(), from, to)
+	j, err := s.store.Journal(r.Context(), me(r), from, to)
 	if err != nil {
 		s.fail(w, err, "journal")
 		return
@@ -202,12 +203,13 @@ func (s *Server) handleSetJournal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ctx := r.Context()
+	uid := me(r)
 	if in.Text != nil || in.Bad != nil || in.Important != nil {
-		if err := s.store.SetJournalFields(ctx, date, in.Text, in.Bad, in.Important); err != nil {
+		if err := s.store.SetJournalFields(ctx, uid, date, in.Text, in.Bad, in.Important); err != nil {
 			s.fail(w, err, "set journal")
 			return
 		}
 	}
-	full, _ := s.store.JournalFull(ctx, date, date)
+	full, _ := s.store.JournalFull(ctx, uid, date, date)
 	writeJSON(w, http.StatusOK, map[string]string{"date": date, "text": full[date].Text, "bad": full[date].Bad, "important": full[date].Important})
 }

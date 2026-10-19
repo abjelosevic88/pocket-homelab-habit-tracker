@@ -167,6 +167,24 @@ func MonthBounds(month string) (first, last time.Time, err error) {
 	return
 }
 
+// affected turns "no row matched" into ErrNotFound: an update or delete of a row the user
+// does not own looks exactly like one of a row that does not exist.
+func affected(res sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// owns reports whether the row id of table (habits or trackers) belongs to the user.
+func (s *Store) owns(ctx context.Context, table string, uid, id int64) bool {
+	var one int
+	return s.DB.QueryRowContext(ctx, `SELECT 1 FROM `+table+` WHERE id = ? AND user_id = ?`, id, uid).Scan(&one) == nil
+}
+
 func notFound(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound

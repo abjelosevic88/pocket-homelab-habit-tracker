@@ -139,7 +139,7 @@ func fetchOpenMeteo(ctx context.Context, base string, lat, lon float64, from, to
 
 // refreshWeather fetches the days in from..to: the phone's place for days that have one,
 // the home location for the rest. Returns how many days were written.
-func (s *Server) refreshWeather(ctx context.Context, st store.Settings, from, to string) (int, error) {
+func (s *Server) refreshWeather(ctx context.Context, uid int64, st store.Settings, from, to string) (int, error) {
 	if !st.WeatherEnabled || (st.WeatherLat == 0 && st.WeatherLon == 0) {
 		return 0, fmt.Errorf("weather is off or the home location is not set")
 	}
@@ -147,7 +147,7 @@ func (s *Server) refreshWeather(ctx context.Context, st store.Settings, from, to
 	if to > today {
 		to = today
 	}
-	locs, err := s.store.Locations(ctx, from, to)
+	locs, err := s.store.Locations(ctx, uid, from, to)
 	if err != nil {
 		return 0, err
 	}
@@ -164,7 +164,7 @@ func (s *Server) refreshWeather(ctx context.Context, st store.Settings, from, to
 				return n, err
 			}
 			for _, w := range days {
-				if err := s.store.UpsertWeather(ctx, w); err != nil {
+				if err := s.store.UpsertWeather(ctx, uid, w); err != nil {
 					return n, err
 				}
 				n++
@@ -189,38 +189,39 @@ func (s *Server) refreshWeather(ctx context.Context, st store.Settings, from, to
 			return n, err
 		}
 		for _, w := range days {
-			if err := s.store.UpsertWeather(ctx, w); err != nil {
+			if err := s.store.UpsertWeather(ctx, uid, w); err != nil {
 				return n, err
 			}
 			n++
 		}
 		i = j + 1
 	}
-	_ = s.store.SetSetting(ctx, "weather_last", store.Now())
+	_ = s.store.SetSetting(ctx, uid, "weather_last", store.Now())
 	return n, nil
 }
 
 // backfillWeather fetches every day since the first habit or tracker that has no weather yet,
 // at most two years back.
-func (s *Server) backfillWeather(ctx context.Context, st store.Settings) (int, error) {
-	from, err := s.store.FirstTrackedDay(ctx)
+func (s *Server) backfillWeather(ctx context.Context, uid int64, st store.Settings) (int, error) {
+	from, err := s.store.FirstTrackedDay(ctx, uid)
 	if err != nil {
 		from = time.Now().AddDate(0, -3, 0).Format("2006-01-02")
 	}
 	if floor := time.Now().AddDate(-2, 0, 0).Format("2006-01-02"); from < floor {
 		from = floor
 	}
-	missing, err := s.store.MissingWeatherDays(ctx, from, store.Today())
+	missing, err := s.store.MissingWeatherDays(ctx, uid, from, store.Today())
 	if err != nil || len(missing) == 0 {
 		return 0, err
 	}
-	return s.refreshWeather(ctx, st, missing[0], missing[len(missing)-1])
+	return s.refreshWeather(ctx, uid, st, missing[0], missing[len(missing)-1])
 }
 
-// RunWeather is called by the scheduler every minute: every three hours it refreshes today
-// and yesterday (today's numbers firm up during the day), and fills in missing days once.
-func (s *Server) RunWeather(ctx context.Context) {
-	st, err := s.store.GetSettings(ctx)
+// RunWeather is called by the scheduler every minute for each user: every three hours it
+// refreshes today and yesterday at their place (today's numbers firm up during the day),
+// and fills in their missing days once.
+func (s *Server) RunWeather(ctx context.Context, uid int64) {
+	st, err := s.store.GetSettings(ctx, uid)
 	if err != nil || !st.WeatherEnabled || (st.WeatherLat == 0 && st.WeatherLon == 0) {
 		return
 	}
@@ -230,15 +231,15 @@ func (s *Server) RunWeather(ctx context.Context) {
 		}
 	}
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	if _, err := s.refreshWeather(ctx, st, yesterday, store.Today()); err != nil {
-		s.log.Warn("weather refresh failed", "err", err)
-		_ = s.store.SetSetting(ctx, "weather_last", store.Now()) // try again in three hours, not every minute
+	if _, err := s.refreshWeather(ctx, uid, st, yesterday, store.Today()); err != nil {
+		s.log.Warn("weather refresh failed", "user", uid, "err", err)
+		_ = s.store.SetSetting(ctx, uid, "weather_last", store.Now()) // try again in three hours, not every minute
 		return
 	}
-	if n, err := s.backfillWeather(ctx, st); err != nil {
-		s.log.Warn("weather backfill failed", "err", err)
+	if n, err := s.backfillWeather(ctx, uid, st); err != nil {
+		s.log.Warn("weather backfill failed", "user", uid, "err", err)
 	} else if n > 0 {
-		s.log.Info("weather backfilled", "days", n)
+		s.log.Info("weather backfilled", "user", uid, "days", n)
 	}
 }
 
@@ -256,7 +257,7 @@ func (s *Server) handleWeather(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "from/to must be YYYY-MM-DD")
 		return
 	}
-	days, err := s.store.Weather(r.Context(), from, to)
+	days, err := s.store.Weather(r.Context(), me(r), from, to)
 	if err != nil {
 		s.fail(w, err, "weather")
 		return
@@ -286,8 +287,9 @@ func (s *Server) handleSetWeather(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Condition = strings.ToLower(strings.TrimSpace(in.Condition))
 	ctx := r.Context()
+	uid := me(r)
 	if in.Condition == "" {
-		if err := s.store.ClearWeatherOverride(ctx, date); err != nil {
+		if err := s.store.ClearWeatherOverride(ctx, uid, date); err != nil {
 			s.fail(w, err, "weather")
 			return
 		}
@@ -302,12 +304,12 @@ func (s *Server) handleSetWeather(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "condition must be one of "+strings.Join(store.Conditions, ", "))
 			return
 		}
-		if err := s.store.SetWeatherOverride(ctx, date, in.Condition); err != nil {
+		if err := s.store.SetWeatherOverride(ctx, uid, date, in.Condition); err != nil {
 			s.fail(w, err, "weather")
 			return
 		}
 	}
-	d, err := s.store.WeatherDay(ctx, date)
+	d, err := s.store.WeatherDay(ctx, uid, date)
 	if err != nil {
 		s.fail(w, err, "weather")
 		return
@@ -317,7 +319,7 @@ func (s *Server) handleSetWeather(w http.ResponseWriter, r *http.Request) {
 
 // handleRefreshWeather fetches now: {"from":"…","to":"…"} or nothing for the backfill plus today.
 func (s *Server) handleRefreshWeather(w http.ResponseWriter, r *http.Request) {
-	st, err := s.store.GetSettings(r.Context())
+	st, err := s.store.GetSettings(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "settings")
 		return
@@ -339,13 +341,13 @@ func (s *Server) handleRefreshWeather(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "from/to must be YYYY-MM-DD")
 			return
 		}
-		n, err = s.refreshWeather(r.Context(), st, in.From, in.To)
+		n, err = s.refreshWeather(r.Context(), me(r), st, in.From, in.To)
 	} else {
 		yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-		n, err = s.refreshWeather(r.Context(), st, yesterday, store.Today())
+		n, err = s.refreshWeather(r.Context(), me(r), st, yesterday, store.Today())
 		if err == nil {
 			var more int
-			more, err = s.backfillWeather(r.Context(), st)
+			more, err = s.backfillWeather(r.Context(), me(r), st)
 			n += more
 		}
 	}
@@ -434,18 +436,19 @@ func (s *Server) handleSetLocation(w http.ResponseWriter, r *http.Request) {
 	in.Place = strings.TrimSpace(in.Place)
 	in.Source = strings.TrimSpace(in.Source)
 	ctx := r.Context()
-	if err := s.store.SetLocation(ctx, in); err != nil {
+	uid := me(r)
+	if err := s.store.SetLocation(ctx, uid, in); err != nil {
 		s.fail(w, err, "location")
 		return
 	}
-	st, _ := s.store.GetSettings(ctx)
+	st, _ := s.store.GetSettings(ctx, uid)
 	var weather *store.WeatherDay
 	if st.WeatherEnabled {
 		if days, err := fetchWeather(ctx, in.Lat, in.Lon, in.Date, in.Date, in.Place); err == nil {
 			for _, d := range days {
-				_ = s.store.UpsertWeather(ctx, d)
+				_ = s.store.UpsertWeather(ctx, uid, d)
 			}
-			if d, err := s.store.WeatherDay(ctx, in.Date); err == nil {
+			if d, err := s.store.WeatherDay(ctx, uid, in.Date); err == nil {
 				weather = &d
 			}
 		} else {
@@ -467,7 +470,7 @@ func (s *Server) handleLocations(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "from/to must be YYYY-MM-DD")
 		return
 	}
-	locs, err := s.store.Locations(r.Context(), from, to)
+	locs, err := s.store.Locations(r.Context(), me(r), from, to)
 	if err != nil {
 		s.fail(w, err, "locations")
 		return

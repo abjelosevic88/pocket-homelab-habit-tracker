@@ -143,9 +143,9 @@ The token is kept in the device's secure store (the Keychain on Apple devices). 
 
 The database is a single file. Use whichever you like:
 
-- **UI:** Settings → Backup & data → *Download database* (a consistent `VACUUM INTO` copy).
+- **UI:** Settings → Backup & data → *Download database* (a consistent `VACUUM INTO` copy). The file holds everybody's data, so the download is offered only to the admin of a single-account box; once other people have accounts, use the CLI on the host (everyone can still export their own data as JSON/CSV).
 - **CLI:** `docker exec pocket-habits pocket-habits backup` writes to `/data/backups/`.
-- **API:** `GET /api/v1/backup`.
+- **API:** `GET /api/v1/backup` (same rule as the UI).
 - **Export:** JSON (re-importable) or CSV.
 
 Restic / Borg / Backrest users: back up `DATA_DIR`, but snapshot the live `pocket-habits.db` through one of the above rather than copying the WAL files raw. See [docs/backup.md](docs/backup.md).

@@ -44,11 +44,12 @@ function useSettingsForm() {
 
 function General() {
   const { f, setF, save, busy } = useSettingsForm()
+  const { user } = useApp()
   if (!f) return <Loading />
   return (
     <Card title="Preferences">
       <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
-        <Field label="App title" help="Shown in the sidebar and browser tab."><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} /></Field>
+        {user?.role === 'admin' && <Field label="App title" help="Shown in the sidebar and browser tab, for everyone on this box."><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} /></Field>}
         <Field label="Journal prompt"><input value={f.journal_prompt} onChange={e => setF({ ...f, journal_prompt: e.target.value })} maxLength={80} /></Field>
         <Field label="Second line: one bad thing" help="Adds a second box on the Today page and a second column on the month page. Off by default — the notebook only asks for the good thing.">
           <Segmented value={f.bad_thing_enabled ? 'on' : 'off'} onChange={v => setF({ ...f, bad_thing_enabled: v === 'on' })} options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'On' }]} />
@@ -186,6 +187,7 @@ function Tokens() {
 }
 
 function Data() {
+  const { data: sys } = useAsync(() => api.get<{ db_download?: boolean }>(`${V1}/settings/system`), [])
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
   const importFile = async (file: File) => {
@@ -194,12 +196,12 @@ function Data() {
   }
   return (
     <div className="two-col">
-      <Card title="Backup">
+      {sys?.db_download && <Card title="Backup">
         <p className="muted">A consistent copy of the SQLite database (<code>VACUUM INTO</code>). Restore by stopping the app and replacing <code>pocket-habits.db</code> in the data directory.</p>
         <a className="btn primary" href={`${V1}/backup`}>Download database</a>
-      </Card>
+      </Card>}
       <Card title="Export & import">
-        <p className="muted">Portable JSON (re-importable here) or a long CSV for spreadsheets.</p>
+        <p className="muted">Your own habits, trackers and journal as portable JSON (re-importable here) or a long CSV for spreadsheets.</p>
         <div className="row mb"><a className="btn" href={`${V1}/export.json`}>Export JSON</a><a className="btn" href={`${V1}/export.csv`}>Export CSV</a></div>
         <label className="btn ghost">{busy ? 'Importing…' : 'Import JSON…'}<input type="file" accept="application/json" hidden onChange={e => e.target.files?.[0] && importFile(e.target.files[0])} /></label>
         <p className="muted small mt">Import merges: habits and trackers are matched by name, entries are upserted.</p>

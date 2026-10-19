@@ -8,6 +8,8 @@ Authorization: Bearer ph_xxxxxxxx…
 
 Create tokens under **Settings → API tokens**. Dates are `YYYY-MM-DD` in the server's `TZ`; months are `YYYY-MM`.
 
+Every account has its own data. Whatever authenticates the request (session, `ph_` token, a Pocket Core token, a single sign-on session) resolves to one account, and every endpoint reads and writes only that account's habits, trackers, entries, journal, weather, locations and settings. Another account's ids answer `404`. Only the app title is shared by the box (admins change it).
+
 For a ready-made client, [Pocket Homelab](https://pockethomelab.com/) (iPhone, iPad, Mac, Android) uses this API with a token: the check-in, the month page, the dashboard, insights, and the habits and trackers. See the README's [Companion app](../README.md#companion-app-pocket-homelab) section.
 
 ## Day-to-day
@@ -72,7 +74,7 @@ Trackers mirror this under `/trackers`: `{"name","kind":"scale"|"number"|"yesno"
 | `POST` | `/settings/test-reminder` | Sends a test using the posted settings. |
 | `GET` | `/settings/system` | Version, runtime, db size, row counts. |
 | `GET` / `POST` / `DELETE` | `/tokens`, `/tokens/{id}` | Personal tokens (plaintext shown once). |
-| `GET` | `/backup` | Consistent SQLite copy. |
+| `GET` | `/backup` | Consistent SQLite copy (admin only, and only while nobody else has an account: 403 otherwise). |
 | `GET` | `/export.json`, `/export.csv` | Everything. |
 | `POST` | `/import` | Merge an export JSON (match by name, upsert entries). |
 | `GET` | `/healthz`, `/readyz`, `/metrics` | Unauthenticated, outside `/api/v1`. |

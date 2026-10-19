@@ -15,15 +15,48 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	return n, err
 }
 
-// CreateUser inserts a user.
+// CreateUser inserts a user. The very first account also claims anything that was made
+// before anyone existed (an old box upgraded with no account yet, auth mode "none"/"proxy").
 func (s *Store) CreateUser(ctx context.Context, u *User) error {
 	res, err := s.DB.ExecContext(ctx, `INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, ?)`, u.Email, u.Name, u.PasswordHash, u.Role)
 	if err != nil {
 		return err
 	}
 	u.ID, _ = res.LastInsertId()
+	if n, err := s.CountUsers(ctx); err == nil && n == 1 {
+		return s.claimOrphans(ctx, u.ID)
+	}
 	return nil
 }
+
+// contentTables carry a user_id; every row belongs to exactly one person.
+var contentTables = []string{"habits", "trackers", "habit_entries", "tracker_entries", "journal", "weather_days", "location_days"}
+
+// claimOrphans gives rows without an owner, and personal settings still stored box-wide, to uid.
+func (s *Store) claimOrphans(ctx context.Context, uid int64) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, t := range contentTables {
+		if _, err := tx.ExecContext(ctx, `UPDATE `+t+` SET user_id = ? WHERE user_id IS NULL`, uid); err != nil {
+			return err
+		}
+	}
+	for _, k := range personalKeys {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO user_settings (user_id, key, value) SELECT ?, key, value FROM settings WHERE key = ?`, uid, k); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, k); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// IsAdmin reports whether the account may change box-wide settings.
+func (u *User) IsAdmin() bool { return u != nil && u.Role == "admin" }
 
 // UpdateUser updates name/email/password/role.
 func (s *Store) UpdateUser(ctx context.Context, u *User) error {

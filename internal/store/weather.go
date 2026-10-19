@@ -100,9 +100,9 @@ func scanWeather(row interface{ Scan(dest ...any) error }) (WeatherDay, error) {
 	return w, nil
 }
 
-// Weather returns the stored days in a range, by date.
-func (s *Store) Weather(ctx context.Context, from, to string) (map[string]WeatherDay, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+weatherCols+` FROM weather_days WHERE date >= ? AND date <= ? ORDER BY date`, from, to)
+// Weather returns the user's stored days in a range, by date.
+func (s *Store) Weather(ctx context.Context, uid int64, from, to string) (map[string]WeatherDay, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+weatherCols+` FROM weather_days WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date`, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -118,43 +118,43 @@ func (s *Store) Weather(ctx context.Context, from, to string) (map[string]Weathe
 	return out, rows.Err()
 }
 
-// WeatherDay returns one day, or sql.ErrNoRows.
-func (s *Store) WeatherDay(ctx context.Context, date string) (WeatherDay, error) {
-	return scanWeather(s.DB.QueryRowContext(ctx, `SELECT `+weatherCols+` FROM weather_days WHERE date = ?`, date))
+// WeatherDay returns one of the user's days, or sql.ErrNoRows.
+func (s *Store) WeatherDay(ctx context.Context, uid int64, date string) (WeatherDay, error) {
+	return scanWeather(s.DB.QueryRowContext(ctx, `SELECT `+weatherCols+` FROM weather_days WHERE user_id = ? AND date = ?`, uid, date))
 }
 
 // UpsertWeather writes a fetched day. A condition set by hand is kept; the numbers are refreshed.
-func (s *Store) UpsertWeather(ctx context.Context, w WeatherDay) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO weather_days (`+weatherCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
-		ON CONFLICT(date) DO UPDATE SET code = excluded.code,
+func (s *Store) UpsertWeather(ctx context.Context, uid int64, w WeatherDay) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO weather_days (user_id, `+weatherCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+		ON CONFLICT(user_id, date) DO UPDATE SET code = excluded.code,
 			condition = CASE WHEN weather_days.overridden = 1 THEN weather_days.condition ELSE excluded.condition END,
 			t_max = excluded.t_max, t_min = excluded.t_min, precip_mm = excluded.precip_mm, sunshine_h = excluded.sunshine_h, daylight_h = excluded.daylight_h,
 			lat = excluded.lat, lon = excluded.lon, place = excluded.place, fetched_at = excluded.fetched_at`,
-		w.Date, w.Code, w.Condition, w.TMax, w.TMin, w.PrecipMM, w.SunshineH, w.DaylightH, w.Lat, w.Lon, w.Place, w.FetchedAt)
+		uid, w.Date, w.Code, w.Condition, w.TMax, w.TMin, w.PrecipMM, w.SunshineH, w.DaylightH, w.Lat, w.Lon, w.Place, w.FetchedAt)
 	return err
 }
 
 // SetWeatherOverride sets the condition by hand (the day row is made when there is none yet).
-func (s *Store) SetWeatherOverride(ctx context.Context, date, condition string) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO weather_days (date, code, condition, overridden) VALUES (?, -1, ?, 1)
-		ON CONFLICT(date) DO UPDATE SET condition = excluded.condition, overridden = 1`, date, condition)
+func (s *Store) SetWeatherOverride(ctx context.Context, uid int64, date, condition string) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO weather_days (user_id, date, code, condition, overridden) VALUES (?, ?, -1, ?, 1)
+		ON CONFLICT(user_id, date) DO UPDATE SET condition = excluded.condition, overridden = 1`, uid, date, condition)
 	return err
 }
 
 // ClearWeatherOverride puts the fetched condition back (from the stored code).
-func (s *Store) ClearWeatherOverride(ctx context.Context, date string) error {
-	w, err := s.WeatherDay(ctx, date)
+func (s *Store) ClearWeatherOverride(ctx context.Context, uid int64, date string) error {
+	w, err := s.WeatherDay(ctx, uid, date)
 	if err != nil {
 		return err
 	}
-	_, err = s.DB.ExecContext(ctx, `UPDATE weather_days SET overridden = 0, condition = ? WHERE date = ?`, ConditionFromCode(w.Code), date)
+	_, err = s.DB.ExecContext(ctx, `UPDATE weather_days SET overridden = 0, condition = ? WHERE user_id = ? AND date = ?`, ConditionFromCode(w.Code), uid, date)
 	return err
 }
 
 // MissingWeatherDays lists the days in a range with no fetched weather (an overridden day
 // without numbers counts as missing too).
-func (s *Store) MissingWeatherDays(ctx context.Context, from, to string) ([]string, error) {
-	have, err := s.Weather(ctx, from, to)
+func (s *Store) MissingWeatherDays(ctx context.Context, uid int64, from, to string) ([]string, error) {
+	have, err := s.Weather(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -176,9 +176,9 @@ func (s *Store) MissingWeatherDays(ctx context.Context, from, to string) ([]stri
 	return out, nil
 }
 
-// Locations returns the days with a phone location in a range.
-func (s *Store) Locations(ctx context.Context, from, to string) (map[string]LocationDay, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT date, lat, lon, place, source, recorded_at FROM location_days WHERE date >= ? AND date <= ? ORDER BY date`, from, to)
+// Locations returns the user's days with a phone location in a range.
+func (s *Store) Locations(ctx context.Context, uid int64, from, to string) (map[string]LocationDay, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT date, lat, lon, place, source, recorded_at FROM location_days WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date`, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -195,17 +195,17 @@ func (s *Store) Locations(ctx context.Context, from, to string) (map[string]Loca
 }
 
 // SetLocation records where the phone was on a day; the latest report of a day wins.
-func (s *Store) SetLocation(ctx context.Context, l LocationDay) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO location_days (date, lat, lon, place, source, recorded_at) VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(date) DO UPDATE SET lat = excluded.lat, lon = excluded.lon, place = excluded.place, source = excluded.source, recorded_at = excluded.recorded_at`,
-		l.Date, l.Lat, l.Lon, l.Place, l.Source, Now())
+func (s *Store) SetLocation(ctx context.Context, uid int64, l LocationDay) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO location_days (user_id, date, lat, lon, place, source, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(user_id, date) DO UPDATE SET lat = excluded.lat, lon = excluded.lon, place = excluded.place, source = excluded.source, recorded_at = excluded.recorded_at`,
+		uid, l.Date, l.Lat, l.Lon, l.Place, l.Source, Now())
 	return err
 }
 
-// FirstTrackedDay is the earliest start date of a habit or tracker, for the backfill.
-func (s *Store) FirstTrackedDay(ctx context.Context) (string, error) {
+// FirstTrackedDay is the earliest start date of one of the user's habits or trackers, for the backfill.
+func (s *Store) FirstTrackedDay(ctx context.Context, uid int64) (string, error) {
 	var d sql.NullString
-	err := s.DB.QueryRowContext(ctx, `SELECT MIN(d) FROM (SELECT MIN(start_date) AS d FROM habits UNION ALL SELECT MIN(start_date) FROM trackers)`).Scan(&d)
+	err := s.DB.QueryRowContext(ctx, `SELECT MIN(d) FROM (SELECT MIN(start_date) AS d FROM habits WHERE user_id = ? UNION ALL SELECT MIN(start_date) FROM trackers WHERE user_id = ?)`, uid, uid).Scan(&d)
 	if err != nil {
 		return "", err
 	}
@@ -248,8 +248,8 @@ type WeatherInsights struct {
 
 // WeatherInsightsFor groups the range's days by weather and averages the scale trackers and
 // the habit rate per group. Buckets with no day are left out.
-func (s *Store) WeatherInsightsFor(ctx context.Context, from, to string, habits []Habit, trackers []Tracker, hEntries map[int64]map[string]int, tEntries map[int64]map[string]float64, units string) (*WeatherInsights, error) {
-	weather, err := s.Weather(ctx, from, to)
+func (s *Store) WeatherInsightsFor(ctx context.Context, uid int64, from, to string, habits []Habit, trackers []Tracker, hEntries map[int64]map[string]int, tEntries map[int64]map[string]float64, units string) (*WeatherInsights, error) {
+	weather, err := s.Weather(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}

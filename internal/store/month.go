@@ -88,31 +88,31 @@ func Days(month string, today string) ([]Day, error) {
 }
 
 // Month assembles the month page.
-func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
+func (s *Store) Month(ctx context.Context, uid int64, month string) (*MonthPage, error) {
 	today := Today()
 	days, err := Days(month, today)
 	if err != nil {
 		return nil, err
 	}
 	from, to := days[0].Date, days[len(days)-1].Date
-	habits, err := s.ListHabits(ctx, month, true)
+	habits, err := s.ListHabits(ctx, uid, month, true)
 	if err != nil {
 		return nil, err
 	}
-	trackers, err := s.ListTrackers(ctx, month, true)
+	trackers, err := s.ListTrackers(ctx, uid, month, true)
 	if err != nil {
 		return nil, err
 	}
-	hEntries, err := s.HabitEntries(ctx, from, to)
+	hEntries, err := s.HabitEntries(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
-	tEntries, err := s.TrackerEntries(ctx, from, to)
+	tEntries, err := s.TrackerEntries(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
 	tDefaulted := FillDefaults(trackers, tEntries, from, to, today)
-	full, err := s.JournalFull(ctx, from, to)
+	full, err := s.JournalFull(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 			bad[d] = e.Bad
 		}
 	}
-	weather, err := s.Weather(ctx, from, to)
+	weather, err := s.Weather(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 		page.Summary.Done += mh.Done
 		page.Summary.Missed += mh.Missed
 		page.Summary.Unmarked += maxInt(0, mh.Scheduled-mh.Done-mh.Missed)
-		mh.Streak = s.streak(ctx, h, today)
+		mh.Streak = s.streak(ctx, uid, h, today)
 		page.Habits = append(page.Habits, mh)
 	}
 	for d, ok := range perfect {
@@ -211,10 +211,10 @@ func (s *Store) Month(ctx context.Context, month string) (*MonthPage, error) {
 }
 
 // streak counts consecutive scheduled days marked done, ending today or yesterday.
-func (s *Store) streak(ctx context.Context, h Habit, today string) int {
+func (s *Store) streak(ctx context.Context, uid int64, h Habit, today string) int {
 	t, _ := ParseDate(today)
 	from := t.AddDate(0, 0, -400).Format("2006-01-02")
-	entries, err := s.HabitEntries(ctx, from, today)
+	entries, err := s.HabitEntries(ctx, uid, from, today)
 	if err != nil {
 		return 0
 	}
@@ -274,30 +274,30 @@ type TodayTracker struct {
 }
 
 // Day assembles the check-in page for one date.
-func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
+func (s *Store) Day(ctx context.Context, uid int64, date string) (*TodayPage, error) {
 	t, err := ParseDate(date)
 	if err != nil {
 		return nil, err
 	}
 	month := t.Format("2006-01")
-	habits, err := s.ListHabits(ctx, month, true)
+	habits, err := s.ListHabits(ctx, uid, month, true)
 	if err != nil {
 		return nil, err
 	}
-	trackers, err := s.ListTrackers(ctx, month, true)
+	trackers, err := s.ListTrackers(ctx, uid, month, true)
 	if err != nil {
 		return nil, err
 	}
-	hEntries, err := s.HabitEntries(ctx, date, date)
+	hEntries, err := s.HabitEntries(ctx, uid, date, date)
 	if err != nil {
 		return nil, err
 	}
-	tEntries, err := s.TrackerEntries(ctx, date, date)
+	tEntries, err := s.TrackerEntries(ctx, uid, date, date)
 	if err != nil {
 		return nil, err
 	}
 	tDefaulted := FillDefaults(trackers, tEntries, date, date, Today())
-	journal, err := s.JournalFull(ctx, date, date)
+	journal, err := s.JournalFull(ctx, uid, date, date)
 	if err != nil {
 		return nil, err
 	}
@@ -306,14 +306,14 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 		wd = 7
 	}
 	page := &TodayPage{Date: date, Weekday: wd, Journal: journal[date].Text, JournalBad: journal[date].Bad, Important: journal[date].Important, Habits: []TodayHabit{}, Trackers: []TodayTracker{}}
-	if w, err := s.WeatherDay(ctx, date); err == nil {
+	if w, err := s.WeatherDay(ctx, uid, date); err == nil {
 		page.Weather = &w
 	}
 	for _, h := range habits {
 		if !h.ActiveOn(date) {
 			continue
 		}
-		th := TodayHabit{Habit: h, Status: hEntries[h.ID][date], Scheduled: h.Scheduled(t), Streak: s.streak(ctx, h, date)}
+		th := TodayHabit{Habit: h, Status: hEntries[h.ID][date], Scheduled: h.Scheduled(t), Streak: s.streak(ctx, uid, h, date)}
 		if th.Scheduled {
 			page.Total++
 			if th.Status == 1 {
@@ -331,7 +331,7 @@ func (s *Store) Day(ctx context.Context, date string) (*TodayPage, error) {
 			tt.Value = &v
 		}
 		var prev float64
-		if err := s.DB.QueryRowContext(ctx, `SELECT value FROM tracker_entries WHERE tracker_id = ? AND date < ? ORDER BY date DESC LIMIT 1`, tr.ID, date).Scan(&prev); err == nil {
+		if err := s.DB.QueryRowContext(ctx, `SELECT value FROM tracker_entries WHERE tracker_id = ? AND user_id = ? AND date < ? ORDER BY date DESC LIMIT 1`, tr.ID, uid, date).Scan(&prev); err == nil {
 			tt.Previous = &prev
 		} else if tr.DefaultValue != nil && tr.StartDate < date {
 			d := *tr.DefaultValue
@@ -362,13 +362,13 @@ type Dashboard struct {
 }
 
 // DashboardStats computes the dashboard for today.
-func (s *Store) DashboardStats(ctx context.Context) (*Dashboard, error) {
+func (s *Store) DashboardStats(ctx context.Context, uid int64) (*Dashboard, error) {
 	today := Today()
-	day, err := s.Day(ctx, today)
+	day, err := s.Day(ctx, uid, today)
 	if err != nil {
 		return nil, err
 	}
-	month, err := s.Month(ctx, today[:7])
+	month, err := s.Month(ctx, uid, today[:7])
 	if err != nil {
 		return nil, err
 	}
@@ -383,20 +383,20 @@ func (s *Store) DashboardStats(ctx context.Context) (*Dashboard, error) {
 			d.BestStreak, d.BestHabit = h.Streak, h.Name
 		}
 	}
-	d.PerfectStreak = s.perfectStreak(ctx, today)
+	d.PerfectStreak = s.perfectStreak(ctx, uid, today)
 	d.Weather = day.Weather
 	return d, nil
 }
 
 // perfectStreak counts consecutive days (ending today or yesterday) where every scheduled habit was done.
-func (s *Store) perfectStreak(ctx context.Context, today string) int {
+func (s *Store) perfectStreak(ctx context.Context, uid int64, today string) int {
 	t, _ := ParseDate(today)
 	from := t.AddDate(0, 0, -400).Format("2006-01-02")
-	habits, err := s.ListHabits(ctx, "", true)
+	habits, err := s.ListHabits(ctx, uid, "", true)
 	if err != nil {
 		return 0
 	}
-	entries, err := s.HabitEntries(ctx, from, today)
+	entries, err := s.HabitEntries(ctx, uid, from, today)
 	if err != nil {
 		return 0
 	}
@@ -508,7 +508,7 @@ type JournalLine struct {
 }
 
 // InsightsRange computes insights for an inclusive date range.
-func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, error) {
+func (s *Store) InsightsRange(ctx context.Context, uid int64, from, to string) (*Insights, error) {
 	start, err := ParseDate(from)
 	if err != nil {
 		return nil, err
@@ -522,24 +522,24 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 		to = today
 		end, _ = ParseDate(today)
 	}
-	habits, err := s.ListHabits(ctx, "", true)
+	habits, err := s.ListHabits(ctx, uid, "", true)
 	if err != nil {
 		return nil, err
 	}
-	trackers, err := s.ListTrackers(ctx, "", true)
+	trackers, err := s.ListTrackers(ctx, uid, "", true)
 	if err != nil {
 		return nil, err
 	}
-	hEntries, err := s.HabitEntries(ctx, from, to)
+	hEntries, err := s.HabitEntries(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
-	tEntries, err := s.TrackerEntries(ctx, from, to)
+	tEntries, err := s.TrackerEntries(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
 	FillDefaults(trackers, tEntries, from, to, today)
-	journal, err := s.JournalFull(ctx, from, to)
+	journal, err := s.JournalFull(ctx, uid, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -588,7 +588,7 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 			hi.Rate = &r
 		}
 		hi.BestStreak = best
-		hi.Streak = s.streak(ctx, h, today)
+		hi.Streak = s.streak(ctx, uid, h, today)
 		out.Habits = append(out.Habits, hi)
 	}
 	for _, t := range trackers {
@@ -699,9 +699,9 @@ func (s *Store) InsightsRange(ctx context.Context, from, to string) (*Insights, 
 	for _, d := range jd {
 		out.Journal = append(out.Journal, JournalLine{Date: d, Text: journal[d].Text, Bad: journal[d].Bad, Important: journal[d].Important})
 	}
-	st, _ := s.GetSettings(ctx)
+	st, _ := s.GetSettings(ctx, uid)
 	if st.WeatherEnabled {
-		if wi, err := s.WeatherInsightsFor(ctx, from, to, habits, trackers, hEntries, tEntries, st.WeatherUnits); err == nil {
+		if wi, err := s.WeatherInsightsFor(ctx, uid, from, to, habits, trackers, hEntries, tEntries, st.WeatherUnits); err == nil {
 			out.Weather = wi
 		}
 	}

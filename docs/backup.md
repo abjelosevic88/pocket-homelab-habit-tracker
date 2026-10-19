@@ -12,6 +12,8 @@ Everything lives in `DATA_DIR` (`/data` in the container):
 - **UI:** Settings → Backup & data → *Download database*.
 - **CLI:** `docker exec pocket-habits pocket-habits backup` (or `backup -o /data/backups/named.db`).
 - **API:** `GET /api/v1/backup` with a token.
+
+The UI/API download is the whole database, i.e. every account's data: it is offered only to the admin, and only while the admin is the only account. On a shared box use the CLI (the operator has the data volume anyway); each person exports their own data from Settings → Backup & data.
 - **Portable:** `GET /api/v1/export.json` — plain JSON you can re-import on another instance.
 
 All of these produce a consistent snapshot even while the app is writing. Copying `pocket-habits.db` raw while the container runs can give you a torn file because of the WAL.

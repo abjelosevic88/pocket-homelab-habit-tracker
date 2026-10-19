@@ -11,8 +11,8 @@ import (
 
 // seedDemo fills an empty database with the notebook's seven habits and
 // ~70 days of plausible history so screenshots and first impressions work.
-func (s *Server) seedDemo(ctx context.Context) error {
-	if habits, _ := s.store.ListHabits(ctx, "", true); len(habits) > 0 {
+func (s *Server) seedDemo(ctx context.Context, uid int64) error {
+	if habits, _ := s.store.ListHabits(ctx, uid, "", true); len(habits) > 0 {
 		return nil
 	}
 	rng := rand.New(rand.NewSource(42))
@@ -37,22 +37,22 @@ func (s *Server) seedDemo(ctx context.Context) error {
 	var habits []store.Habit
 	for _, sd0 := range seeds {
 		h := store.Habit{Name: sd0.name, Days: sd0.days, Color: sd0.color, StartDate: sd}
-		if err := s.store.CreateHabit(ctx, &h); err != nil {
+		if err := s.store.CreateHabit(ctx, uid, &h); err != nil {
 			return err
 		}
 		habits = append(habits, h)
 	}
 	headache := store.Tracker{Name: "Headache", Kind: "yesno", MinValue: 0, MaxValue: 1, Step: 1, HigherIsBetter: false, StartDate: sd}
-	if err := s.store.CreateTracker(ctx, &headache); err != nil {
+	if err := s.store.CreateTracker(ctx, uid, &headache); err != nil {
 		return err
 	}
-	trackers, err := s.store.ListTrackers(ctx, "", true)
+	trackers, err := s.store.ListTrackers(ctx, uid, "", true)
 	if err != nil {
 		return err
 	}
 	for i := range trackers {
 		trackers[i].StartDate = sd
-		_ = s.store.UpdateTracker(ctx, &trackers[i])
+		_ = s.store.UpdateTracker(ctx, uid, &trackers[i])
 	}
 	today := time.Now()
 	weight := 82.0
@@ -73,10 +73,10 @@ func (s *Server) seedDemo(ctx context.Context) error {
 				continue
 			}
 			if rng.Float64() < seeds[i].p {
-				_ = s.store.SetHabitEntry(ctx, h.ID, ds, 1)
+				_ = s.store.SetHabitEntry(ctx, uid, h.ID, ds, 1)
 				doneCount++
 			} else {
-				_ = s.store.SetHabitEntry(ctx, h.ID, ds, -1)
+				_ = s.store.SetHabitEntry(ctx, uid, h.ID, ds, -1)
 			}
 		}
 		if ds == today.Format("2006-01-02") {
@@ -87,27 +87,27 @@ func (s *Server) seedDemo(ctx context.Context) error {
 			switch t.Kind {
 			case "scale":
 				v := math.Round(clamp(base+rng.NormFloat64()*0.5, t.MinValue, t.MaxValue))
-				_ = s.store.SetTrackerEntry(ctx, t.ID, ds, &v)
+				_ = s.store.SetTrackerEntry(ctx, uid, t.ID, ds, &v)
 			case "yesno":
 				v := 0.0
 				if base < 3 && rng.Float64() < 0.6 || rng.Float64() < 0.12 {
 					v = 1
 				}
-				_ = s.store.SetTrackerEntry(ctx, t.ID, ds, &v)
+				_ = s.store.SetTrackerEntry(ctx, uid, t.ID, ds, &v)
 			default:
 				if rng.Float64() < 0.8 {
 					weight += rng.NormFloat64()*0.25 - 0.03
 					v := math.Round(weight*10) / 10
-					_ = s.store.SetTrackerEntry(ctx, t.ID, ds, &v)
+					_ = s.store.SetTrackerEntry(ctx, uid, t.ID, ds, &v)
 				}
 			}
 		}
 		if rng.Float64() < 0.85 {
-			_ = s.store.SetJournal(ctx, ds, lines[rng.Intn(len(lines))], nil)
+			_ = s.store.SetJournal(ctx, uid, ds, lines[rng.Intn(len(lines))], nil)
 		}
 		// Now and then a day worth remembering, marked red on the month page.
 		if rng.Float64() < 0.06 {
-			_ = s.store.SetJournalImportant(ctx, ds, important[rng.Intn(len(important))])
+			_ = s.store.SetJournalImportant(ctx, uid, ds, important[rng.Intn(len(important))])
 		}
 	}
 	s.log.Info("demo data seeded")
