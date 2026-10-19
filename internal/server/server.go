@@ -19,8 +19,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/crypto/bcrypt"
 
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"github.com/abjelosevic88/pocket-homelab-habit-tracker/internal/config"
-	"github.com/abjelosevic88/pocket-homelab-habit-tracker/internal/core"
 	"github.com/abjelosevic88/pocket-homelab-habit-tracker/internal/store"
 )
 
