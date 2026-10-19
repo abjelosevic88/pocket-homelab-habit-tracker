@@ -4,6 +4,7 @@ import { api, V1 } from '../lib/api'
 import type { Habit, Tracker } from '../lib/types'
 import { WEEKDAY_SHORT, currentMonth, monthTitle, shiftMonth, todayISO } from '../lib/dates'
 import { Card, Confirm, Empty, Field, Loading, Modal, PageHeader, Segmented, useAsync, useToast } from '../components/ui'
+import { Select } from '../components/Select'
 
 const COLORS = ['', '#2563eb', '#7c3aed', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777', '#4b5563']
 
@@ -205,10 +206,7 @@ function TrackerModal({ tracker, onClose, onSaved, onDelete }: { tracker: Partia
           {f.kind === 'yesno' ? (
             <Segmented value={f.default_value === 1 ? 'yes' : f.default_value === 0 ? 'no' : 'none'} onChange={v => setF({ ...f, default_value: v === 'yes' ? 1 : v === 'no' ? 0 : null })} options={[{ value: 'none', label: 'No default' }, { value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]} />
           ) : f.kind === 'scale' ? (
-            <select value={f.default_value === null ? '' : String(f.default_value)} onChange={e => setF({ ...f, default_value: e.target.value === '' ? null : Number(e.target.value) })} style={{ maxWidth: 200 }}>
-              <option value="">No default</option>
-              {scaleSteps(Number(f.min_value), Number(f.max_value), Number(f.step)).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div style={{ maxWidth: 200 }}><Select ariaLabel="Default value" value={f.default_value === null ? '' : String(f.default_value)} onChange={v => setF({ ...f, default_value: v === '' ? null : Number(v) })} options={scaleSteps(Number(f.min_value), Number(f.max_value), Number(f.step)).map(s => ({ value: String(s), label: String(s) }))} placeholder="No default" clearLabel="No default" /></div>
           ) : (
             <input type="number" step="any" value={f.default_value === null ? '' : f.default_value} onChange={e => setF({ ...f, default_value: e.target.value === '' ? null : Number(e.target.value) })} placeholder="none" style={{ maxWidth: 200 }} />
           )}
