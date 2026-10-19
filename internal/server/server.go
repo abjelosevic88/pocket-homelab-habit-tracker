@@ -42,6 +42,9 @@ type Server struct {
 	coreOK   bool
 	coreErr  string
 	resolved map[string]resolvedURL
+
+	oidc   *oidcProvider // keyed on the issuer; rebuilt by provider() when it changes
+	oidcMu sync.Mutex
 }
 
 type resolvedURL struct {
@@ -53,7 +56,8 @@ type resolvedURL struct {
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Server {
 	return &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(),
 		core:     core.New(cfg.CoreURL, core.Options{TokenFile: cfg.DataDir + "/core.token"}),
-		resolved: map[string]resolvedURL{}}
+		resolved: map[string]resolvedURL{},
+		oidc:     &oidcProvider{issuerURL: cfg.OIDCIssuer}}
 }
 
 // Bootstrap seeds the first admin (if configured), default trackers and demo data.
@@ -136,6 +140,8 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/setup", s.handleSetup)
 		r.Get("/auth/status", s.handleAuthStatus)
+		r.Get("/auth/oidc/start", s.handleOIDCStart)
+		r.Get("/auth/oidc/callback", s.handleOIDCCallback)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
@@ -291,13 +297,18 @@ func (s *Server) coreLoop(ctx context.Context) {
 }
 
 func (s *Server) registerWithCore(ctx context.Context) error {
-	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, core.Manifest{
+	m := core.Manifest{
 		Slug: "habits", Name: "Pocket Habits",
 		Description: "A self-hosted habit tracker that copies the one-page bullet-journal spread that actually sticks.",
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "HABITS",
 		Publishes: []string{"habits.marked", "habits.unmarked", "habits.tracked", "habits.checkin"},
-	})
+	}
+	if s.cfg.BaseURL != "" {
+		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration
+		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.cfg.BaseURL + "/api/v1/auth/oidc/callback"}}
+	}
+	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, m)
 	if err != nil {
 		return err
 	}
