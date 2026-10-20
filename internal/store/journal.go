@@ -1,6 +1,11 @@
 package store
 
-import "context"
+import (
+	"context"
+	"database/sql"
+	"errors"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
+)
 
 // JournalEntry is one day's lines.
 type JournalEntry struct {
@@ -12,11 +17,26 @@ type JournalEntry struct {
 
 // SetJournalFields writes the fields that are not nil and leaves the others as they are.
 // A day with every field empty is deleted.
-func (s *Store) SetJournalFields(ctx context.Context, uid int64, date string, text, bad, important *string) error {
+func (s *Store) SetJournalFields(ctx context.Context, uid int64, date string, text, bad, important *string, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := setJournalFields(ctx, tx, uid, date, text, bad, important); err != nil {
+		return err
+	}
+	return core.Commit(tx, after...)
+}
+func setJournalFields(ctx context.Context, db entrySQL, uid int64, date string, text, bad, important *string) error {
 	if _, err := ParseDate(date); err != nil {
 		return err
 	}
-	cur := s.journalDay(ctx, uid, date)
+	var cur JournalEntry
+	err := db.QueryRowContext(ctx, `SELECT text,bad_text,important FROM journal WHERE user_id=? AND date=?`, uid, date).Scan(&cur.Text, &cur.Bad, &cur.Important)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	if text != nil {
 		cur.Text = *text
 	}
@@ -27,10 +47,10 @@ func (s *Store) SetJournalFields(ctx context.Context, uid int64, date string, te
 		cur.Important = *important
 	}
 	if cur.Text == "" && cur.Bad == "" && cur.Important == "" {
-		_, err := s.DB.ExecContext(ctx, `DELETE FROM journal WHERE user_id = ? AND date = ?`, uid, date)
+		_, err := db.ExecContext(ctx, `DELETE FROM journal WHERE user_id = ? AND date = ?`, uid, date)
 		return err
 	}
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO journal (user_id, date, text, bad_text, important, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+	_, err = db.ExecContext(ctx, `INSERT INTO journal (user_id, date, text, bad_text, important, updated_at) VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, date) DO UPDATE SET text = excluded.text, bad_text = excluded.bad_text, important = excluded.important, updated_at = excluded.updated_at`,
 		uid, date, cur.Text, cur.Bad, cur.Important, Now())
 	return err

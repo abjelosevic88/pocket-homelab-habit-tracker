@@ -173,7 +173,20 @@ func TestCoreLinkScopes(t *testing.T) {
 	}
 
 	// the ticks made through the link name the acting app in their events
-	time.Sleep(200 * time.Millisecond)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, err := srv.core.OutboxStatus(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Pending == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("outbox did not drain", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	core.mu.Lock()
 	defer core.mu.Unlock()
 	via := 0

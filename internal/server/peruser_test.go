@@ -296,7 +296,20 @@ func TestPerUserIsolation(t *testing.T) {
 	}
 
 	// events name the person they are about
-	time.Sleep(200 * time.Millisecond)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, err := srv.core.OutboxStatus(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Pending == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("outbox did not drain", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	core.mu.Lock()
 	defer core.mu.Unlock()
 	if len(core.events) == 0 {

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"strings"
 )
 
@@ -106,18 +107,29 @@ func (s *Store) ReorderTrackers(ctx context.Context, uid int64, ids []int64) err
 
 // SetTrackerEntry writes a value of one of the user's trackers; a nil value clears the day.
 // Another user's tracker is ErrNotFound.
-func (s *Store) SetTrackerEntry(ctx context.Context, uid, trackerID int64, date string, value *float64) error {
+func (s *Store) SetTrackerEntry(ctx context.Context, uid, trackerID int64, date string, value *float64, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := setTrackerEntry(ctx, tx, uid, trackerID, date, value); err != nil {
+		return err
+	}
+	return core.Commit(tx, after...)
+}
+func setTrackerEntry(ctx context.Context, db entrySQL, uid, trackerID int64, date string, value *float64) error {
 	if _, err := ParseDate(date); err != nil {
 		return err
 	}
-	if !s.owns(ctx, "trackers", uid, trackerID) {
+	if !ownsEntry(ctx, db, "trackers", uid, trackerID) {
 		return ErrNotFound
 	}
 	if value == nil {
-		_, err := s.DB.ExecContext(ctx, `DELETE FROM tracker_entries WHERE tracker_id = ? AND date = ? AND user_id = ?`, trackerID, date, uid)
+		_, err := db.ExecContext(ctx, `DELETE FROM tracker_entries WHERE tracker_id = ? AND date = ? AND user_id = ?`, trackerID, date, uid)
 		return err
 	}
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO tracker_entries (tracker_id, date, value, updated_at, user_id) VALUES (?, ?, ?, ?, ?)
+	_, err := db.ExecContext(ctx, `INSERT INTO tracker_entries (tracker_id, date, value, updated_at, user_id) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(tracker_id, date) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, trackerID, date, *value, Now(), uid)
 	return err
 }

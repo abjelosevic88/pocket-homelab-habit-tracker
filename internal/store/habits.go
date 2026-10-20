@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"strings"
 	"time"
 )
@@ -106,18 +107,29 @@ func (s *Store) ReorderHabits(ctx context.Context, uid int64, ids []int64) error
 
 // SetHabitEntry sets (status 1/-1) or clears (status 0) a day of one of the user's habits;
 // another user's habit is ErrNotFound.
-func (s *Store) SetHabitEntry(ctx context.Context, uid, habitID int64, date string, status int) error {
+func (s *Store) SetHabitEntry(ctx context.Context, uid, habitID int64, date string, status int, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := setHabitEntry(ctx, tx, uid, habitID, date, status); err != nil {
+		return err
+	}
+	return core.Commit(tx, after...)
+}
+func setHabitEntry(ctx context.Context, db entrySQL, uid, habitID int64, date string, status int) error {
 	if _, err := ParseDate(date); err != nil {
 		return err
 	}
-	if !s.owns(ctx, "habits", uid, habitID) {
+	if !ownsEntry(ctx, db, "habits", uid, habitID) {
 		return ErrNotFound
 	}
 	if status == 0 {
-		_, err := s.DB.ExecContext(ctx, `DELETE FROM habit_entries WHERE habit_id = ? AND date = ? AND user_id = ?`, habitID, date, uid)
+		_, err := db.ExecContext(ctx, `DELETE FROM habit_entries WHERE habit_id = ? AND date = ? AND user_id = ?`, habitID, date, uid)
 		return err
 	}
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO habit_entries (habit_id, date, status, updated_at, user_id) VALUES (?, ?, ?, ?, ?)
+	_, err := db.ExecContext(ctx, `INSERT INTO habit_entries (habit_id, date, status, updated_at, user_id) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(habit_id, date) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`, habitID, date, status, Now(), uid)
 	return err
 }

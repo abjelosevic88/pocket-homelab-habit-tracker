@@ -83,16 +83,15 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	uid := me(r)
+	habits := map[int64]int{}
+	trackers := map[int64]*float64{}
 	for k, st := range in.Habits {
 		id, err := strconv.ParseInt(k, 10, 64)
 		if err != nil || (st != 1 && st != -1 && st != 0) {
 			writeErr(w, http.StatusBadRequest, "habits must map id -> 1 | -1 | 0")
 			return
 		}
-		if err := s.store.SetHabitEntry(ctx, uid, id, in.Date, st); err != nil {
-			s.fail(w, err, "set habit")
-			return
-		}
+		habits[id] = st
 	}
 	for k, v := range in.Trackers {
 		id, err := strconv.ParseInt(k, 10, 64)
@@ -100,25 +99,20 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "trackers must map id -> number | null")
 			return
 		}
-		if err := s.store.SetTrackerEntry(ctx, uid, id, in.Date, v); err != nil {
-			s.fail(w, err, "set tracker")
-			return
-		}
+		trackers[id] = v
 	}
-	if in.Journal != nil || in.Bad != nil || in.Important != nil {
-		if err := s.store.SetJournalFields(ctx, uid, in.Date, in.Journal, in.Bad, in.Important); err != nil {
-			s.fail(w, err, "set journal")
-			return
-		}
+	if err := s.store.SaveCheckin(ctx, uid, in.Date, habits, trackers, in.Journal, in.Bad, in.Important, s.userEvent(ctx, userFrom(r.Context()), "habits.checkin", "day:"+in.Date, map[string]any{
+		"date": in.Date, "habits": len(in.Habits), "trackers": len(in.Trackers), "journal": in.Journal != nil || in.Bad != nil || in.Important != nil,
+	})); err != nil {
+		s.fail(w, err, "save check-in")
+		return
 	}
 	page, err := s.store.Day(ctx, uid, in.Date)
 	if err != nil {
 		s.fail(w, err, "load day")
 		return
 	}
-	s.publish(userFrom(r.Context()), "habits.checkin", "day:"+in.Date, map[string]any{
-		"date": in.Date, "habits": len(in.Habits), "trackers": len(in.Trackers), "journal": in.Journal != nil || in.Bad != nil || in.Important != nil,
-	})
+
 	writeJSON(w, http.StatusOK, page)
 }
 

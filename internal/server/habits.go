@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"net/http"
 	"regexp"
 	"strings"
@@ -226,17 +227,17 @@ func (s *Server) handleSetHabitEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "status must be 1 (done), -1 (missed) or 0 (clear)")
 		return
 	}
-	if err := s.store.SetHabitEntry(r.Context(), me(r), h.ID, date, in.Status); err != nil {
-		s.fail(w, err, "set entry")
-		return
-	}
 	topic := "habits.marked"
 	if in.Status == 0 {
 		topic = "habits.unmarked"
 	}
-	s.publish(userFrom(r.Context()), topic, fmt.Sprintf("habit:%d", h.ID), viaLink(r, map[string]any{
+	if err := s.store.SetHabitEntry(r.Context(), me(r), h.ID, date, in.Status, s.userEvent(r.Context(), userFrom(r.Context()), topic, fmt.Sprintf("habit:%d", h.ID), viaLink(r, map[string]any{
 		"habit_id": h.ID, "habit": h.Name, "date": date, "status": in.Status,
-	}))
+	}))); err != nil {
+		s.fail(w, err, "set entry")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"habit_id": h.ID, "date": date, "status": in.Status})
 }
 
@@ -246,13 +247,13 @@ func (s *Server) handleClearHabitEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "date must be YYYY-MM-DD")
 		return
 	}
-	if err := s.store.SetHabitEntry(r.Context(), me(r), idParam(r, "id"), date, 0); err != nil {
+	if err := s.store.SetHabitEntry(r.Context(), me(r), idParam(r, "id"), date, 0, s.userEvent(r.Context(), userFrom(r.Context()), "habits.unmarked", fmt.Sprintf("habit:%d", idParam(r, "id")), viaLink(r, map[string]any{
+		"habit_id": idParam(r, "id"), "date": date, "status": 0,
+	}))); err != nil {
 		s.fail(w, err, "clear entry")
 		return
 	}
-	s.publish(userFrom(r.Context()), "habits.unmarked", fmt.Sprintf("habit:%d", idParam(r, "id")), viaLink(r, map[string]any{
-		"habit_id": idParam(r, "id"), "date": date, "status": 0,
-	}))
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -495,14 +496,15 @@ func (s *Server) handleSetTrackerEntry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "value must be 1 (yes) or 0 (no)")
 		return
 	}
-	if err := s.store.SetTrackerEntry(r.Context(), me(r), t.ID, date, in.Value); err != nil {
-		s.fail(w, err, "set value")
-		return
-	}
+	var event core.CommitHook
 	if in.Value != nil {
-		s.publish(userFrom(r.Context()), "habits.tracked", fmt.Sprintf("tracker:%d", t.ID), map[string]any{
+		event = s.userEvent(r.Context(), userFrom(r.Context()), "habits.tracked", fmt.Sprintf("tracker:%d", t.ID), map[string]any{
 			"tracker_id": t.ID, "tracker": t.Name, "kind": t.Kind, "unit": t.Unit, "date": date, "value": *in.Value,
 		})
+	}
+	if err := s.store.SetTrackerEntry(r.Context(), me(r), t.ID, date, in.Value, event); err != nil {
+		s.fail(w, err, "set value")
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tracker_id": t.ID, "date": date, "value": in.Value})
 }
