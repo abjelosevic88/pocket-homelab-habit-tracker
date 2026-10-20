@@ -55,13 +55,16 @@ type resolvedURL struct {
 // New creates a server.
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Server {
 	return &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(),
-		core:     core.New(cfg.CoreURL, core.Options{TokenFile: cfg.DataDir + "/core.token"}),
+		core:     core.New(cfg.CoreURL, core.Options{DB: st.DB, TokenFile: cfg.DataDir + "/core.token"}),
 		resolved: map[string]resolvedURL{},
 		oidc:     &oidcProvider{issuerURL: cfg.OIDCIssuer}}
 }
 
 // Bootstrap seeds the first admin (if configured), default trackers and demo data.
 func (s *Server) Bootstrap(ctx context.Context) error {
+	if err := s.core.Start(ctx); err != nil {
+		return err
+	}
 	n, err := s.store.CountUsers(ctx)
 	if err != nil {
 		return err
@@ -339,7 +342,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 	return nil
 }
 
-// publish sends an event to Core without blocking the request. Every event names the person
+// publish persists an event locally; the SDK retries network delivery. Every event names the person
 // it is about (the account's email, which is how Core and the sibling apps know people), so a
 // consumer files it under that person and nobody else.
 func (s *Server) publish(u *store.User, topic, subject string, payload map[string]any) {
@@ -347,13 +350,11 @@ func (s *Server) publish(u *store.User, topic, subject string, payload map[strin
 		return
 	}
 	payload["user"] = u.Email
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := s.core.Publish(ctx, topic, subject, payload); err != nil {
-			s.log.Warn("pocket core: publish failed", "topic", topic, "err", err)
-		}
-	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := s.core.Publish(ctx, topic, subject, payload); err != nil {
+		s.log.Warn("pocket core: outbox enqueue failed", "topic", topic, "err", err)
+	}
 }
 
 // resolveSibling asks Core where a sibling app lives (cached a minute) so the
@@ -379,7 +380,7 @@ func (s *Server) resolveSibling(ctx context.Context, slug string) string {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": Version, "uptime": time.Since(s.started).Round(time.Second).String()})
+	writeJSON(w, http.StatusOK, map[string]any{"core_outbox": s.coreOutboxHealth(r.Context()), "status": "ok", "version": Version, "uptime": time.Since(s.started).Round(time.Second).String()})
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {

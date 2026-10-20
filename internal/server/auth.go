@@ -101,7 +101,7 @@ func (s *Server) resolve(r *http.Request) (*store.User, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return noApp(s.store.GetSessionUser(ctx, c.Value))
+	return noApp(s.sessionUser(ctx, c.Value))
 }
 
 func noApp(u *store.User, err error) (*store.User, string, error) { return u, "", err }
@@ -117,7 +117,7 @@ func (s *Server) coreUser(ctx context.Context, tok string) (*store.User, error) 
 	if !in.Active || in.User == nil || in.User.Email == "" {
 		return nil, http.ErrNoCookie
 	}
-	return s.firstOrSystemUser(ctx, strings.ToLower(in.User.Email), in.User.Name)
+	return s.coreIdentityUser(ctx, in)
 }
 
 func (s *Server) firstOrSystemUser(ctx context.Context, email, name string) (*store.User, error) {

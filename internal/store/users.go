@@ -182,3 +182,7 @@ func (s *Store) DeleteAPIToken(ctx context.Context, userID, id int64) error {
 	_, err := s.DB.ExecContext(ctx, `DELETE FROM api_tokens WHERE id = ? AND user_id = ?`, id, userID)
 	return err
 }
+
+func (s *Store) GetUser(ctx context.Context, id int64) (*User, error) {
+	return scanUser(s.DB.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id=?`, id))
+}
