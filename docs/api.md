@@ -10,6 +10,18 @@ Create tokens under **Settings → API tokens**. Dates are `YYYY-MM-DD` in the s
 
 Every account has its own data. Whatever authenticates the request (session, `ph_` token, a Pocket Core token, a single sign-on session) resolves to one account, and every endpoint reads and writes only that account's habits, trackers, entries, journal, weather, locations and settings. Another account's ids answer `404`. Only the app title is shared by the box (admins change it).
 
+### Pocket Core app links
+
+With Pocket Core on the box, another Pocket app can act for a person with a five-minute `pcx_` token Core issues (`Authorization: Bearer pcx_…`). The token resolves to that person's account like any other, and only these routes are open to it:
+
+| Scope | Name | Routes |
+|---|---|---|
+| (any link) | | `GET /auth/me` |
+| `habits:read` | See your habits | `GET /habits`, `GET /habits/{id}`, `GET /days/{date}` |
+| `entries:write` | Tick off habits | `PUT /habits/{id}/entries/{date}`, `DELETE /habits/{id}/entries/{date}` |
+
+Anything else answers `403` ("this Pocket Core link does not cover …"). Events published for a change made through a link carry `"via": "<acting app slug>"`. Links are switched on and off in Core → **Links** (box-wide) and **Settings → Apps acting for me** (per person).
+
 For a ready-made client, [Pocket Homelab](https://pockethomelab.com/) (iPhone, iPad, Mac, Android) uses this API with a token: the check-in, the month page, the dashboard, insights, and the habits and trackers. See the README's [Companion app](../README.md#companion-app-pocket-homelab) section.
 
 ## Day-to-day

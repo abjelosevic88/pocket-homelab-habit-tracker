@@ -234,9 +234,9 @@ func (s *Server) handleSetHabitEntry(w http.ResponseWriter, r *http.Request) {
 	if in.Status == 0 {
 		topic = "habits.unmarked"
 	}
-	s.publish(userFrom(r.Context()), topic, fmt.Sprintf("habit:%d", h.ID), map[string]any{
+	s.publish(userFrom(r.Context()), topic, fmt.Sprintf("habit:%d", h.ID), viaLink(r, map[string]any{
 		"habit_id": h.ID, "habit": h.Name, "date": date, "status": in.Status,
-	})
+	}))
 	writeJSON(w, http.StatusOK, map[string]any{"habit_id": h.ID, "date": date, "status": in.Status})
 }
 
@@ -250,9 +250,9 @@ func (s *Server) handleClearHabitEntry(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "clear entry")
 		return
 	}
-	s.publish(userFrom(r.Context()), "habits.unmarked", fmt.Sprintf("habit:%d", idParam(r, "id")), map[string]any{
+	s.publish(userFrom(r.Context()), "habits.unmarked", fmt.Sprintf("habit:%d", idParam(r, "id")), viaLink(r, map[string]any{
 		"habit_id": idParam(r, "id"), "date": date, "status": 0,
-	})
+	}))
 	w.WriteHeader(http.StatusNoContent)
 }
 

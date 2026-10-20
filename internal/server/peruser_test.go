@@ -25,18 +25,25 @@ type fakeCore struct {
 	*httptest.Server
 	mu     sync.Mutex
 	people map[string][2]string // token → email, name
+	links  map[string][3]string // pcx_ token → email, name, scopes (a linked app acting for that person)
 	events []map[string]any
 }
 
 func newFakeCore(t *testing.T) *fakeCore {
-	c := &fakeCore{people: map[string][2]string{}}
+	c := &fakeCore{people: map[string][2]string{}, links: map[string][3]string{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/auth/introspect", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Token string }
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		c.mu.Lock()
 		p, ok := c.people[in.Token]
+		l, isLink := c.links[in.Token]
 		c.mu.Unlock()
+		if isLink {
+			json.NewEncoder(w).Encode(map[string]any{"active": true, "kind": "delegated", "scope": l[2], "audience": "habits",
+				"user": map[string]any{"id": 9, "email": l[0], "name": l[1], "role": "member"}, "app": map[string]any{"id": 3, "slug": "kitchen", "name": "Pocket Kitchen"}})
+			return
+		}
 		if !ok {
 			json.NewEncoder(w).Encode(map[string]any{"active": false})
 			return

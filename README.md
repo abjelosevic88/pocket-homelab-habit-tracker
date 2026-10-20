@@ -109,6 +109,8 @@ curl -H "Authorization: Bearer ph_…" https://habits.example.com/api/v1/dashboa
 
 Everything else is in [docs/api.md](docs/api.md), including a Homepage `customapi` widget and an ntfy reminder example.
 
+**App links (Pocket Core):** another Pocket app the person allowed in Core can act for them here with a five-minute `pcx_` token. Habits offers `habits:read` ("See your habits": `GET /habits`, `/habits/{id}`, `/days/{date}`) and `entries:write` ("Tick off habits": `PUT`/`DELETE /habits/{id}/entries/{date}`); `GET /auth/me` answers any linked app. The token acts as that person and sees only their habits; every other route answers 403. Pocket Day reads the day and Pocket Kitchen ticks "Cooked at home". Each link can be switched off in Core → **Links** (box-wide) or under **Settings → Apps acting for me** (per person).
+
 ## Companion app: Pocket Homelab
 
 [Pocket Homelab](https://pockethomelab.com/) is a native app for iPhone, iPad, Mac and Android that talks to self-hosted services, and Pocket Habits is one of them. It connects with an API token and gives you:

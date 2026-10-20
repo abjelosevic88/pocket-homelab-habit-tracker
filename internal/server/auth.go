@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -14,7 +15,10 @@ import (
 
 type ctxKey int
 
-const userKey ctxKey = 1
+const (
+	userKey    ctxKey = 1
+	linkAppKey ctxKey = 2 // slug of the Pocket app acting through a link token
+)
 
 const sessionCookie = "ph_session"
 
@@ -36,16 +40,30 @@ func me(r *http.Request) int64 {
 // or trusted proxy header depending on AUTH_MODE.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u, err := s.resolveUser(r)
+		u, app, err := s.resolve(r)
+		if errors.Is(err, errLinkScope) {
+			writeErr(w, http.StatusForbidden, "this Pocket Core link does not cover "+r.Method+" "+r.URL.Path)
+			return
+		}
 		if err != nil || u == nil {
 			writeErr(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+		ctx := context.WithValue(r.Context(), userKey, u)
+		if app != "" {
+			ctx = context.WithValue(ctx, linkAppKey, app)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 func (s *Server) resolveUser(r *http.Request) (*store.User, error) {
+	u, _, err := s.resolve(r)
+	return u, err
+}
+
+// resolve also names the acting app when the request carries a Pocket Core link token.
+func (s *Server) resolve(r *http.Request) (*store.User, string, error) {
 	ctx := r.Context()
 	tok := ""
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(h), "bearer ") {
@@ -54,18 +72,21 @@ func (s *Server) resolveUser(r *http.Request) (*store.User, error) {
 		tok = t
 	}
 	if tok != "" {
-		if s.core.Configured() && core.IsCoreToken(tok) {
-			return s.coreUser(ctx, tok)
+		if s.core.Configured() && core.IsLinkToken(tok) {
+			return s.linkUser(ctx, tok, r)
 		}
-		return s.store.GetUserByAPIToken(ctx, tok)
+		if s.core.Configured() && core.IsCoreToken(tok) {
+			return noApp(s.coreUser(ctx, tok))
+		}
+		return noApp(s.store.GetUserByAPIToken(ctx, tok))
 	}
 	switch s.cfg.AuthMode {
 	case "none":
-		return s.firstOrSystemUser(ctx, "admin@localhost", "Admin")
+		return noApp(s.firstOrSystemUser(ctx, "admin@localhost", "Admin"))
 	case "proxy":
 		name := r.Header.Get(s.cfg.AuthProxyHeader)
 		if name == "" {
-			return nil, http.ErrNoCookie
+			return nil, "", http.ErrNoCookie
 		}
 		email := r.Header.Get(s.cfg.AuthProxyEmailHeader)
 		if email == "" {
@@ -74,14 +95,16 @@ func (s *Server) resolveUser(r *http.Request) (*store.User, error) {
 				email += "@proxy"
 			}
 		}
-		return s.firstOrSystemUser(ctx, strings.ToLower(email), name)
+		return noApp(s.firstOrSystemUser(ctx, strings.ToLower(email), name))
 	}
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return s.store.GetSessionUser(ctx, c.Value)
+	return noApp(s.store.GetSessionUser(ctx, c.Value))
 }
+
+func noApp(u *store.User, err error) (*store.User, string, error) { return u, "", err }
 
 // coreUser validates a token Pocket Core issued to a paired phone (pcd_), a
 // person (pcu_) or an OIDC client (pco_) and maps it to the local account
