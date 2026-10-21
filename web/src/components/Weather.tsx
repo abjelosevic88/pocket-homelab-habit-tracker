@@ -1,6 +1,8 @@
 import type { WeatherCondition, WeatherDay } from '../lib/types'
+import { Icon } from './icons'
 
-export const CONDITION_ICON: Record<string, string> = { clear: '☀️', partly: '⛅', cloudy: '☁️', fog: '🌫️', rain: '🌧️', snow: '❄️', storm: '⛈️' }
+/** A stroke icon per condition (tinted by .wx-<condition>). */
+export const CONDITION_ICON: Record<string, string> = { clear: 'sun', partly: 'cloud-sun', cloudy: 'cloud', fog: 'cloud-fog', rain: 'cloud-rain', snow: 'cloud-snow', storm: 'cloud-lightning' }
 export const CONDITION_LABEL: Record<string, string> = { clear: 'Clear', partly: 'Partly cloudy', cloudy: 'Overcast', fog: 'Fog', rain: 'Rain', snow: 'Snow', storm: 'Thunderstorm' }
 export const CONDITIONS: WeatherCondition[] = ['clear', 'partly', 'cloudy', 'fog', 'rain', 'snow', 'storm']
 
@@ -21,7 +23,8 @@ export function weatherLine(w: WeatherDay, units = 'celsius'): string {
   return parts.join(' · ')
 }
 
-/** The icon with a title, for a strip or a header. */
-export function WeatherIcon({ w, units = 'celsius', size = 14 }: { w: WeatherDay; units?: string; size?: number }) {
-  return <span className="wx-icon" style={{ fontSize: size }} title={weatherLine(w, units)} aria-label={weatherLine(w, units)}>{CONDITION_ICON[w.condition] || '·'}</span>
+/** The condition's icon, tinted; a dot when the condition is unknown. */
+export function WeatherGlyph({ condition, size = 14 }: { condition?: string; size?: number }) {
+  if (!condition || !CONDITION_ICON[condition]) return <span className="wx-glyph wx-none" aria-hidden="true">·</span>
+  return <Icon name={CONDITION_ICON[condition]} size={size} className={`wx-glyph wx-${condition}`} />
 }

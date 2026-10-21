@@ -5,15 +5,28 @@ import { useApp } from '../lib/app-context'
 import type { TodayHabit, TodayPage, TodayTracker } from '../lib/types'
 import { fmtNum, longDate, shiftDate, todayISO } from '../lib/dates'
 import { Card, Loading, PageHeader, Segmented, bandFor, useAsync, useToast } from '../components/ui'
-import { CONDITION_ICON, weatherLine } from '../components/Weather'
+import { WeatherGlyph, weatherLine } from '../components/Weather'
+import { Icon } from '../components/icons'
+import { useOnChange } from '../components/Layout'
 
 export default function Today() {
   const { date = todayISO() } = useParams()
   const navigate = useNavigate()
   const { settings } = useApp()
   const { toast } = useToast()
-  const { data, setData, loading, error } = useAsync(() => api.get<TodayPage>(`${V1}/days/${date}`), [date])
+  const { data, setData, loading, error, reload } = useAsync(() => api.get<TodayPage>(`${V1}/days/${date}`), [date])
   const isToday = date === todayISO()
+  useOnChange(() => { reload() })
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (e.metaKey || e.ctrlKey || e.altKey || t.closest('input, textarea, [contenteditable="true"]') || document.querySelector('.modal-backdrop, .palette-backdrop, .menu')) return
+      if (e.key === 'ArrowLeft') navigate(`/today/${shiftDate(date, -1)}`)
+      if (e.key === 'ArrowRight' && !isToday) navigate(shiftDate(date, 1) === todayISO() ? '/today' : `/today/${shiftDate(date, 1)}`)
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [date, isToday, navigate])
 
   const setHabit = async (h: TodayHabit, status: number) => {
     const next = h.status === status ? 0 : status
@@ -26,7 +39,7 @@ export default function Today() {
   }
 
   if (loading && !data) return <Loading />
-  if (error) return <div className="callout danger">{error}</div>
+  if (error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{error}</span></div>
   if (!data) return null
   const scheduled = data.habits.filter(h => h.scheduled)
   const unscheduled = data.habits.filter(h => !h.scheduled)
@@ -37,9 +50,9 @@ export default function Today() {
   return (
     <div className="today">
       <PageHeader
-        title={<span className="row"><button className="btn ghost icon" onClick={() => navigate(`/today/${shiftDate(date, -1)}`)} aria-label="Previous day">‹</button><span>{isToday ? 'Today' : longDate(date)}</span><button className="btn ghost icon" onClick={() => navigate(`/today/${shiftDate(date, 1)}`)} disabled={isToday} aria-label="Next day">›</button></span>}
+        title={<span className="row day-nav"><button type="button" className="btn ghost icon-only" onClick={() => navigate(`/today/${shiftDate(date, -1)}`)} aria-label="Previous day" title="Previous day (←)"><Icon name="chevron-left" size={18} /></button><span>{isToday ? 'Today' : longDate(date)}</span><button type="button" className="btn ghost icon-only" onClick={() => navigate(`/today/${shiftDate(date, 1)}`)} disabled={isToday} aria-label="Next day" title="Next day (→)"><Icon name="chevron-right" size={18} /></button></span>}
         sub={isToday ? longDate(date) : undefined}
-        actions={<>{!isToday && <Link className="btn" to="/today">Back to today</Link>}<Link className="btn" to={`/month/${date.slice(0, 7)}`}>Month page</Link></>}
+        actions={<>{!isToday && <Link className="btn" to="/today"><Icon name="undo" size={15} />Back to today</Link>}<Link className="btn" to={`/month/${date.slice(0, 7)}`}><Icon name="grid" size={15} />Month page</Link></>}
       />
 
       <div className="progress-row">
@@ -47,12 +60,12 @@ export default function Today() {
         <div>
           <div className="big">{allMarked ? (done === scheduled.length ? 'Perfect day.' : `${done} green, ${scheduled.length - done} red.`) : `${scheduled.length - marked} left to mark`}</div>
           <div className="muted small">Takes a minute. Green = did it, red = didn't. The aim is more greens than reds.</div>
-          {data.weather && settings?.weather_enabled && <div className="wx-line" title="The day's weather, from Open-Meteo"><span>{CONDITION_ICON[data.weather.condition] || '·'}</span> {weatherLine(data.weather, settings.weather_units)}</div>}
+          {data.weather && settings?.weather_enabled && <div className="wx-line" title="The day's weather, from Open-Meteo"><WeatherGlyph condition={data.weather.condition} size={15} /><span>{weatherLine(data.weather, settings.weather_units)}</span></div>}
         </div>
       </div>
 
-      <Card title={<>Habits <span className="count">{done}/{scheduled.length}</span></>} flush className="section">
-        {scheduled.length === 0 && unscheduled.length === 0 && <div className="pad muted">No habits yet. <Link to="/manage">Add some →</Link></div>}
+      <Card title={<><Icon name="check-square" size={15} />Habits <span className="count">{done}/{scheduled.length}</span></>} flush className="section">
+        {scheduled.length === 0 && unscheduled.length === 0 && <div className="pad muted">No habits yet. <Link to="/manage?new=habit">Add some →</Link></div>}
         <ul className="checkin-list">
           {scheduled.map(h => <HabitRow key={h.id} h={h} onSet={setHabit} />)}
           {unscheduled.length > 0 && <li className="divider muted small">Not scheduled today</li>}
@@ -61,7 +74,7 @@ export default function Today() {
       </Card>
 
       {data.trackers.length > 0 && (
-        <Card title={<>Scores & measurements <span className="count">{data.trackers.filter(t => t.value !== null).length}/{data.trackers.length}</span></>} flush className="section">
+        <Card title={<><Icon name="sliders" size={15} />Scores & measurements <span className="count">{data.trackers.filter(t => t.value !== null).length}/{data.trackers.length}</span></>} flush className="section">
           <ul className="checkin-list">
             {data.trackers.map(t => <TrackerRow key={t.id} t={t} onSet={setTracker} />)}
           </ul>
@@ -91,11 +104,11 @@ function HabitRow({ h, onSet, dim }: { h: TodayHabit; onSet: (h: TodayHabit, s: 
       <div className="ci-name">
         {h.color && <span className="swatch" style={{ background: h.color }} />}
         <span>{h.name}</span>
-        {h.streak > 1 && <span className="streak">🔥{h.streak}</span>}
+        {h.streak > 1 && <span className="streak" title={`${h.streak}-day streak`}><Icon name="flame" size={13} strokeWidth={2} />{h.streak}</span>}
       </div>
       <div className={`ci-actions ${h.status !== 0 ? 'has-choice' : ''}`}>
-        <button className={`mark done ${h.status === 1 ? 'active' : ''}`} onClick={() => onSet(h, 1)} aria-pressed={h.status === 1} aria-label={`${h.name} done`}><span>✓</span></button>
-        <button className={`mark missed ${h.status === -1 ? 'active' : ''}`} onClick={() => onSet(h, -1)} aria-pressed={h.status === -1} aria-label={`${h.name} missed`}><span>✗</span></button>
+        <button type="button" className={`mark done ${h.status === 1 ? 'active' : ''}`} onClick={() => onSet(h, 1)} aria-pressed={h.status === 1} aria-label={`${h.name} done`}><Icon name="check" size={20} strokeWidth={2.6} /></button>
+        <button type="button" className={`mark missed ${h.status === -1 ? 'active' : ''}`} onClick={() => onSet(h, -1)} aria-pressed={h.status === -1} aria-label={`${h.name} missed`}><Icon name="x" size={20} strokeWidth={2.6} /></button>
       </div>
     </li>
   )
@@ -111,8 +124,8 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
       <li className={`checkin yesno-row ${t.value === 1 ? `is-${yesTone}` : t.value === 0 ? `is-${noTone}` : ''} ${t.defaulted ? 'is-default' : ''}`}>
         <div className="ci-name"><span>{t.name}</span><span className="muted small">{t.defaulted ? `${t.value === 1 ? 'yes' : 'no'} by default` : t.previous !== null ? `yesterday ${t.previous === 1 ? 'yes' : 'no'}` : ''}</span></div>
         <div className={`ci-actions ${t.value !== null ? 'has-choice' : ''}`}>
-          <button className={`mark yn ${yesTone} ${t.value === 1 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 1 ? null : 1)} aria-pressed={t.value === 1}>Yes</button>
-          <button className={`mark yn ${noTone} ${t.value === 0 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 0 ? null : 0)} aria-pressed={t.value === 0}>No</button>
+          <button type="button" className={`mark yn ${yesTone} ${t.value === 1 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 1 ? null : 1)} aria-pressed={t.value === 1}>Yes</button>
+          <button type="button" className={`mark yn ${noTone} ${t.value === 0 ? 'active' : ''}`} onClick={() => onSet(t, t.value === 0 ? null : 0)} aria-pressed={t.value === 0}>No</button>
         </div>
       </li>
     )
@@ -124,7 +137,7 @@ function TrackerRow({ t, onSet }: { t: TodayTracker; onSet: (t: TodayTracker, v:
       <li className={`checkin scale-row ${t.value !== null ? 'has-value' : ''} ${t.defaulted ? 'is-default' : ''}`}>
         <div className="ci-name"><span>{t.name}</span><span className="muted small">{t.value !== null ? `${fmtNum(t.value)} of ${fmtNum(t.max_value)}${t.defaulted ? ' by default' : ''}` : `${fmtNum(t.min_value)}–${fmtNum(t.max_value)}`}{!t.higher_is_better ? ' · lower is better' : ''}</span></div>
         <div className="scale" role="radiogroup" aria-label={t.name}>
-          {steps.map(s => <button key={s} role="radio" aria-checked={t.value === s} className={`pill ${bandFor(s, t.min_value, t.max_value, t.higher_is_better)} ${t.value === s ? 'active' : ''}`} onClick={() => onSet(t, t.value === s ? null : s)}>{fmtNum(s)}</button>)}
+          {steps.map(s => <button type="button" key={s} role="radio" aria-checked={t.value === s} className={`pill ${bandFor(s, t.min_value, t.max_value, t.higher_is_better)} ${t.value === s ? 'active' : ''}`} onClick={() => onSet(t, t.value === s ? null : s)}>{fmtNum(s)}</button>)}
         </div>
       </li>
     )
@@ -164,8 +177,8 @@ function JournalBox({ date, text, field, placeholder, onSaved }: { date: string;
     <div className="journal-box">
       <textarea rows={3} value={v} onChange={e => setV(e.target.value)} onBlur={save} placeholder={placeholder} maxLength={4000} />
       <div className="journal-foot">
-        <span className="muted small">{state === 'saving' ? 'Saving…' : state === 'saved' ? '✓ Saved' : v === last.current && v ? '✓ Saved' : 'Saves when you click away'}</span>
-        <button className="btn sm primary" onClick={save} disabled={v === last.current}>Save</button>
+        <span className="muted small save-state">{state === 'saving' ? 'Saving…' : state === 'saved' || (v === last.current && v) ? <><Icon name="check" size={13} strokeWidth={2.4} className="ok" />Saved</> : 'Saves when you click away'}</span>
+        <button type="button" className="btn sm primary" onClick={save} disabled={v === last.current}>Save</button>
       </div>
     </div>
   )

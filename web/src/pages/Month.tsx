@@ -5,7 +5,9 @@ import { useApp } from '../lib/app-context'
 import type { Day, MonthHabit, MonthPage, MonthTracker, WeatherDay } from '../lib/types'
 import { currentMonth, monthTitle, pct, shiftMonth, shortDate } from '../lib/dates'
 import { Card, Empty, Loading, Modal, PageHeader, Segmented, useAsync, useToast } from '../components/ui'
-import { CONDITIONS, CONDITION_ICON, CONDITION_LABEL, weatherLine } from '../components/Weather'
+import { CONDITIONS, CONDITION_LABEL, WeatherGlyph, weatherLine } from '../components/Weather'
+import { Icon } from '../components/icons'
+import { useOnChange } from '../components/Layout'
 import HabitGrid from '../components/HabitGrid'
 import TrackerChart from '../components/TrackerChart'
 
@@ -14,7 +16,8 @@ export default function Month() {
   const navigate = useNavigate()
   const { settings } = useApp()
   const { toast } = useToast()
-  const { data, setData, loading, error } = useAsync(() => api.get<MonthPage>(`${V1}/months/${month}`), [month])
+  const { data, setData, loading, error, reload } = useAsync(() => api.get<MonthPage>(`${V1}/months/${month}`), [month])
+  useOnChange(() => { reload() })
   const isCurrent = month === currentMonth()
   const [wx, setWx] = useState<{ day: Day; w?: WeatherDay } | null>(null)
   const [imp, setImp] = useState<Day | null>(null)
@@ -29,6 +32,7 @@ export default function Month() {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return
+      if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector('.modal-backdrop, .palette-backdrop, .menu, .picker-backdrop')) return
       if (e.key === 'ArrowLeft') navigate(`/month/${shiftMonth(month, -1)}`)
       if (e.key === 'ArrowRight' && !isCurrent) navigate(`/month/${shiftMonth(month, 1)}`)
     }
@@ -53,7 +57,7 @@ export default function Month() {
   }, [month, setData, toast])
 
   if (loading && !data) return <Loading />
-  if (error) return <div className="callout danger">{error}</div>
+  if (error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{error}</span></div>
   if (!data) return null
   const s = data.summary
   const scored = s.done + s.missed
@@ -61,13 +65,13 @@ export default function Month() {
   return (
     <>
       <PageHeader
-        title={<span className="row"><button className="btn ghost icon" onClick={() => navigate(`/month/${shiftMonth(month, -1)}`)} aria-label="Previous month">‹</button><span>{monthTitle(month)}</span><button className="btn ghost icon" onClick={() => navigate(`/month/${shiftMonth(month, 1)}`)} disabled={isCurrent} aria-label="Next month">›</button></span>}
+        title={<span className="row day-nav"><button type="button" className="btn ghost icon-only" onClick={() => navigate(`/month/${shiftMonth(month, -1)}`)} aria-label="Previous month" title="Previous month (←)"><Icon name="chevron-left" size={18} /></button><span>{monthTitle(month)}</span><button type="button" className="btn ghost icon-only" onClick={() => navigate(`/month/${shiftMonth(month, 1)}`)} disabled={isCurrent} aria-label="Next month" title="Next month (→)"><Icon name="chevron-right" size={18} /></button></span>}
         sub={scored > 0 ? <>More greens than reds is the goal · <b className="ok">{s.done}</b> green, <b className="bad">{s.missed}</b> red, {pct(s.rate)} · {s.perfect_days} perfect day{s.perfect_days === 1 ? '' : 's'} · {s.journal_days} journal line{s.journal_days === 1 ? '' : 's'}</> : 'Click a cell to mark a habit: once for done, twice for missed.'}
-        actions={<>{!isCurrent && <Link className="btn" to="/month">This month</Link>}<Link className="btn primary" to="/today">Check in today</Link></>}
+        actions={<>{!isCurrent && <Link className="btn" to="/month"><Icon name="undo" size={15} />This month</Link>}<Link className="btn primary" to="/today"><Icon name="check" size={15} strokeWidth={2.4} />Check in today</Link></>}
       />
 
       <Card flush className="mb">
-        {data.habits.length === 0 && <div className="pad"><Empty title="No habits on this page yet">Pick up to seven things you want to do (or avoid) this month. <Link to="/manage">Add habits →</Link></Empty></div>}
+        {data.habits.length === 0 && <div className="pad"><Empty title="No habits on this page yet">Pick up to seven things you want to do (or avoid) this month. <Link to="/manage?new=habit">Add habits →</Link></Empty></div>}
         {/* one scroller for the grid and the charts, so the days stay in line on a phone */}
         <div className="grid-scroll">
           <div className="month-sheet">
@@ -93,13 +97,13 @@ export default function Month() {
         <Modal title={`Weather on ${shortDate(wx.day.date)}`} onClose={() => setWx(null)}>
           {wx.w ? <p className="muted">{weatherLine(wx.w, settings?.weather_units)}{wx.w.overridden ? ' · set by hand' : ''}</p> : <p className="muted">Nothing fetched for this day yet.</p>}
           <p className="small muted">Set the condition by hand when you were somewhere else or the station was wrong. The numbers stay as fetched.</p>
-          <div className="row wrap" style={{ gap: 8 }}>
+          <div className="row wrap wx-choices">
             {CONDITIONS.map(c => (
-              <button key={c} className={`btn ${wx.w?.condition === c ? 'primary' : ''}`} onClick={async () => {
+              <button type="button" key={c} className={`btn ${wx.w?.condition === c ? 'primary' : ''}`} onClick={async () => {
                 try { await api.put(`${V1}/weather/${wx.day.date}`, { condition: c }); setData(await api.get<MonthPage>(`${V1}/months/${month}`)); setWx(null) } catch (e) { toast((e as Error).message, 'err') }
-              }}>{CONDITION_ICON[c]} {CONDITION_LABEL[c]}</button>
+              }}><WeatherGlyph condition={c} size={15} />{CONDITION_LABEL[c]}</button>
             ))}
-            {wx.w?.overridden && <button className="btn ghost" onClick={async () => {
+            {wx.w?.overridden && <button type="button" className="btn ghost" onClick={async () => {
               try { await api.put(`${V1}/weather/${wx.day.date}`, { condition: '' }); setData(await api.get<MonthPage>(`${V1}/months/${month}`)); setWx(null) } catch (e) { toast((e as Error).message, 'err') }
             }}>Back to the fetched one</button>}
           </div>
@@ -135,10 +139,11 @@ function ImportantModal({ day, text, onSave, onClose }: { day: Day; text: string
       <p className="small muted">Something to remember about this day. The day turns red on the month page.</p>
       <textarea rows={4} autoFocus value={v} onChange={e => setV(e.target.value)} maxLength={4000} placeholder="What happened, or what is coming…" style={{ width: '100%' }}
         onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save(v) }} />
-      <div className="row" style={{ gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
-        {text && <button className="btn ghost danger-text" disabled={saving} onClick={() => save('')}>Remove</button>}
-        <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={saving || v.trim() === text} onClick={() => save(v)}>{saving ? 'Saving…' : 'Save'}</button>
+      <div className="form-actions mt-s">
+        {text && <button type="button" className="btn ghost danger-text" disabled={saving} onClick={() => save('')}>Remove</button>}
+        <span className="spacer" />
+        <button type="button" className="btn" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn primary" disabled={saving || v.trim() === text} onClick={() => save(v)}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
     </Modal>
   )

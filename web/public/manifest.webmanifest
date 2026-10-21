@@ -3,7 +3,7 @@
   "short_name": "Habits",
   "start_url": "/today",
   "display": "standalone",
-  "background_color": "#f5f6f8",
+  "background_color": "#ffffff",
   "theme_color": "#16a34a",
   "icons": [
     {

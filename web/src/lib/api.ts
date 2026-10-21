@@ -25,6 +25,8 @@ async function request<T>(method: string, url: string, body?: unknown, raw = fal
     } catch {}
     throw new ApiError(res.status, msg)
   }
+  // Something changed: the sidebar re-reads today's marks.
+  if (method !== 'GET' && !url.includes('/auth/')) window.dispatchEvent(new CustomEvent('ph:mutated'))
   if (raw) return (await res.text()) as unknown as T
   if (res.status === 204) return undefined as T
   return res.json()

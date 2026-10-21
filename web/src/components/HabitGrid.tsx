@@ -1,6 +1,7 @@
 import type { Day, MonthHabit, WeatherDay } from '../lib/types'
 import { isoWeekday, shortDate } from '../lib/dates'
-import { CONDITION_ICON, temp, weatherLine } from './Weather'
+import { WeatherGlyph, temp, weatherLine } from './Weather'
+import { Icon } from './icons'
 
 interface Props {
   days: Day[]
@@ -43,7 +44,7 @@ export default function HabitGrid({ days, habits, onCycle, onEdit, weather, unit
               </th>
             )
           })}
-          <th className="sum-col">✓ / ✗</th>
+          <th className="sum-col"><span className="sum-head"><Icon name="check" size={11} strokeWidth={3} className="ok" />/<Icon name="x" size={11} strokeWidth={3} className="bad" /></span></th>
         </tr>
         {hasWeather && (
           <tr className="wx-row">
@@ -53,7 +54,7 @@ export default function HabitGrid({ days, habits, onCycle, onEdit, weather, unit
               return (
                 <th key={d.date} className={`day wx ${d.today ? 'today' : ''}`}>
                   <button type="button" className="wx-cell" disabled={d.future} title={w ? weatherLine(w, units) : d.future ? '' : 'No weather for this day yet — click to set it'} onClick={() => onWeather?.(d, w)}>
-                    <span className="wx-i">{w ? (CONDITION_ICON[w.condition] || '·') : ''}</span>
+                    <span className="wx-i">{w ? <WeatherGlyph condition={w.condition} size={13} /> : ''}</span>
                     <span className="wx-t">{w && w.t_max !== null ? temp(w.t_max, units) : ''}</span>
                   </button>
                 </th>
@@ -67,10 +68,10 @@ export default function HabitGrid({ days, habits, onCycle, onEdit, weather, unit
         {habits.map(h => (
           <tr key={h.id}>
             <th className="name-col" scope="row">
-              <button className="name-btn" onClick={() => onEdit?.(h)} title={h.days === '1234567' ? 'Every day' : 'Scheduled on selected days'}>
+              <button type="button" className="name-btn" onClick={() => onEdit?.(h)} title={h.days === '1234567' ? 'Every day' : 'Scheduled on selected days'}>
                 {h.color && <span className="swatch" style={{ background: h.color }} />}
                 <span className="nm">{h.name}</span>
-                {h.streak > 1 && <span className="streak" title={`${h.streak}-day streak`}>🔥{h.streak}</span>}
+                {h.streak > 1 && <span className="streak" title={`${h.streak}-day streak`}><Icon name="flame" size={12} strokeWidth={2} />{h.streak}</span>}
               </button>
             </th>
             {days.map(d => {
@@ -81,12 +82,13 @@ export default function HabitGrid({ days, habits, onCycle, onEdit, weather, unit
               return (
                 <td key={d.date} className={cls}>
                   <button
+                    type="button"
                     disabled={d.future}
                     aria-label={`${h.name} ${shortDate(d.date)}: ${st === 1 ? 'done' : st === -1 ? 'missed' : 'not marked'}`}
                     title={`${shortDate(d.date)} · ${st === 1 ? 'done' : st === -1 ? 'missed' : scheduled ? 'not marked' : 'not scheduled'}`}
                     onClick={() => onCycle(h, d.date, nextStatus(st))}
                   >
-                    {st === 1 ? '✓' : st === -1 ? '✗' : ''}
+                    {st === 1 ? <Icon name="check" size={13} strokeWidth={3} /> : st === -1 ? <Icon name="x" size={13} strokeWidth={3} /> : null}
                   </button>
                 </td>
               )

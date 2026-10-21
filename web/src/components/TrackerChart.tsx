@@ -138,17 +138,17 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
             <div className="picker-head"><strong>{tracker.name}</strong><span className="muted">{shortDate(pick)}</span></div>
             {isScale ? (
               <div className="pills">
-                {steps.map(s => <button key={s} className={`pill ${bandFor(s, tracker.min_value, tracker.max_value, tracker.higher_is_better)} ${tracker.entries[pick] === s ? 'active' : ''}`} onClick={() => commit(pick, String(s))}>{fmtNum(s)}</button>)}
+                {steps.map(s => <button type="button" key={s} className={`pill ${bandFor(s, tracker.min_value, tracker.max_value, tracker.higher_is_better)} ${tracker.entries[pick] === s ? 'active' : ''}`} onClick={() => commit(pick, String(s))}>{fmtNum(s)}</button>)}
               </div>
             ) : (
               <form className="row" onSubmit={e => { e.preventDefault(); commit(pick, draft) }}>
                 <input autoFocus inputMode="decimal" value={draft} onChange={e => setDraft(e.target.value)} placeholder={tracker.unit} />
-                <button className="btn primary">Save</button>
+                <button type="submit" className="btn primary">Save</button>
               </form>
             )}
             <div className="row" style={{ justifyContent: 'space-between', marginTop: 10 }}>
-              <button className="btn ghost sm" onClick={() => commit(pick, '')} disabled={tracker.entries[pick] === undefined}>Clear</button>
-              <button className="btn ghost sm" onClick={() => setPick(null)}>Close</button>
+              <button type="button" className="btn ghost sm" onClick={() => commit(pick, '')} disabled={tracker.entries[pick] === undefined}>Clear</button>
+              <button type="button" className="btn ghost sm" onClick={() => setPick(null)}>Close</button>
             </div>
           </div>
         </div>

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import type { Insights as InsightsT, TrackerInsight, WeatherBucket } from '../lib/types'
-import { CONDITION_ICON } from '../components/Weather'
+import { CONDITION_ICON, WeatherGlyph } from '../components/Weather'
+import { Icon } from '../components/icons'
 import { WEEKDAY_LETTER, fmtNum, pct, shortDate } from '../lib/dates'
 import { Card, Empty, Loading, PageHeader, Segmented, useAsync } from '../components/ui'
 
@@ -10,7 +11,7 @@ export default function Insights() {
   const [months, setMonths] = useState(3)
   const { data, loading, error } = useAsync(() => api.get<InsightsT>(`${V1}/insights?months=${months}`), [months])
   if (loading && !data) return <Loading />
-  if (error) return <div className="callout danger">{error}</div>
+  if (error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{error}</span></div>
   if (!data) return null
   const scales = data.trackers.filter(t => t.kind === 'scale')
   const numbers = data.trackers.filter(t => t.kind === 'number')
@@ -19,12 +20,12 @@ export default function Insights() {
 
   return (
     <>
-      <PageHeader title="Insights" sub={`${data.from} → ${data.to}. See how sleep and mood line up with what you did or didn't do.`} actions={<Segmented value={months} onChange={setMonths} options={[{ value: 1, label: '1 mo' }, { value: 3, label: '3 mo' }, { value: 6, label: '6 mo' }, { value: 12, label: '12 mo' }]} />} />
+      <PageHeader title="Insights" sub={`${data.from} → ${data.to}. See how sleep and mood line up with what you did or didn't do.`} actions={<Segmented size="sm" label="Range" value={months} onChange={setMonths} options={[{ value: 1, label: '1 mo' }, { value: 3, label: '3 mo' }, { value: 6, label: '6 mo' }, { value: 12, label: '12 mo' }]} />} />
 
       <Card title="Habits" flush className="mb">
-        {data.habits.length === 0 ? <div className="pad"><Empty title="Nothing to analyse yet"><Link to="/manage">Add habits</Link> and mark a few days.</Empty></div> : (
+        {data.habits.length === 0 ? <div className="pad"><Empty icon="chart" title="Nothing to analyse yet"><Link to="/manage?new=habit">Add habits</Link> and mark a few days.</Empty></div> : (
           <table className="table">
-            <thead><tr><th>Habit</th><th>Rate</th><th className="right">✓</th><th className="right">✗</th><th className="right">Streak</th><th className="right">Best</th><th>By weekday</th></tr></thead>
+            <thead><tr><th>Habit</th><th>Rate</th><th className="right" title="Done"><Icon name="check" size={13} strokeWidth={2.6} className="ok th-ico" /></th><th className="right" title="Missed"><Icon name="x" size={13} strokeWidth={2.6} className="bad th-ico" /></th><th className="right">Streak</th><th className="right">Best</th><th>By weekday</th></tr></thead>
             <tbody>
               {data.habits.map(h => (
                 <tr key={h.id} className={h.end_date && h.end_date < data.to ? 'muted' : ''}>
@@ -32,7 +33,7 @@ export default function Insights() {
                   <td style={{ minWidth: 140 }}><div className="bar"><span className="fill ok" style={{ width: pct(h.rate) === '–' ? 0 : pct(h.rate) }} /></div><span className="small">{pct(h.rate)}</span></td>
                   <td className="right ok">{h.done}</td>
                   <td className="right bad">{h.missed}</td>
-                  <td className="right">{h.streak > 0 ? `🔥${h.streak}` : '–'}</td>
+                  <td className="right">{h.streak > 0 ? <span className="streak"><Icon name="flame" size={12} strokeWidth={2} />{h.streak}</span> : '–'}</td>
                   <td className="right">{h.best_streak}</td>
                   <td><div className="wd-heat">{h.weekdays.map((r, i) => <span key={i} className={`wd ${r === null ? 'na' : r >= 2 / 3 ? 'high' : r >= 1 / 3 ? 'mid' : 'low'}`} title={`${WEEKDAY_LETTER[i]}: ${pct(r)}`}>{WEEKDAY_LETTER[i]}</span>)}</div></td>
                 </tr>
@@ -96,11 +97,11 @@ function WeatherCard({ w }: { w: import('../lib/types').WeatherInsights }) {
         <div key={g.title} className="mb">
           <div className="small muted" style={{ marginBottom: 4 }}>{g.title}</div>
           <table className="table compact">
-            <thead><tr><th /><th className="right">Days</th>{scoreNames.map(n => <th key={n} className="right">{n}</th>)}<th className="right">Habits ✓</th></tr></thead>
+            <thead><tr><th /><th className="right">Days</th>{scoreNames.map(n => <th key={n} className="right">{n}</th>)}<th className="right">Habits done</th></tr></thead>
             <tbody>
               {g.rows.map(b => (
                 <tr key={b.key}>
-                  <td>{CONDITION_ICON[b.key] ? <span>{CONDITION_ICON[b.key]} </span> : null}{b.label}</td>
+                  <td><span className="row wx-cond">{CONDITION_ICON[b.key] ? <WeatherGlyph condition={b.key} size={15} /> : null}{b.label}</span></td>
                   <td className="right">{b.days}</td>
                   {b.scores.map(s => <td key={s.tracker_id} className="right">{fmtNum(s.avg)}{s.n ? <span className="muted small"> ({s.n})</span> : ''}</td>)}
                   <td className="right">{pct(b.habit_rate)}</td>

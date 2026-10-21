@@ -5,6 +5,7 @@ import type { Habit, Tracker } from '../lib/types'
 import { WEEKDAY_SHORT, currentMonth, monthTitle, shiftMonth, todayISO } from '../lib/dates'
 import { Card, Confirm, Empty, Field, Loading, Modal, PageHeader, Segmented, useAsync, useToast } from '../components/ui'
 import { Select } from '../components/Select'
+import { Icon } from '../components/icons'
 
 const COLORS = ['', '#2563eb', '#7c3aed', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777', '#4b5563']
 
@@ -17,10 +18,23 @@ export default function Manage() {
   const [editTracker, setEditTracker] = useState<Partial<Tracker> | null>(null)
   const [confirm, setConfirm] = useState<{ title: string; message: string; run: () => Promise<void> } | null>(null)
 
+  // Deep links: ?habit=<id> / ?tracker=<id> open the editor, ?new=habit|tracker a blank one (sidebar, palette, shortcuts).
+  const NEW_TRACKER: Partial<Tracker> = { kind: 'scale', min_value: 1, max_value: 5, step: 1, higher_is_better: true }
   useEffect(() => {
     const id = Number(params.get('habit'))
     if (id && habits.data) { const h = habits.data.find(x => x.id === id); if (h) { setEditHabit(h); params.delete('habit'); setParams(params, { replace: true }) } }
-  }, [habits.data]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [habits.data, params]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = Number(params.get('tracker'))
+    if (id && trackers.data) { const t = trackers.data.find(x => x.id === id); if (t) { setEditTracker(t); params.delete('tracker'); setParams(params, { replace: true }) } }
+  }, [trackers.data, params]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const n = params.get('new')
+    if (!n) return
+    if (n === 'habit') setEditHabit({ days: '1234567' })
+    if (n === 'tracker') setEditTracker(NEW_TRACKER)
+    params.delete('new'); setParams(params, { replace: true })
+  }, [params]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = todayISO()
   const active = (x: { end_date: string | null }) => !x.end_date || x.end_date >= today
@@ -38,23 +52,23 @@ export default function Manage() {
 
   return (
     <>
-      <PageHeader title="Habits & trackers" sub="Swap habits out each month if they stop being relevant. Seven is plenty." actions={<><button className="btn" onClick={() => setEditTracker({ kind: 'scale', min_value: 1, max_value: 5, step: 1, higher_is_better: true })}>+ Tracker</button><button className="btn primary" onClick={() => setEditHabit({ days: '1234567' })}>+ Habit</button></>} />
+      <PageHeader title="Habits & trackers" sub="Swap habits out each month if they stop being relevant. Seven is plenty." actions={<><button type="button" className="btn" onClick={() => setEditTracker(NEW_TRACKER)}><Icon name="sliders" size={15} />New tracker</button><button type="button" className="btn primary" onClick={() => setEditHabit({ days: '1234567' })}><Icon name="plus" size={15} />New habit</button></>} />
 
       <div className="two-col">
-        <Card title={`Habits (${activeHabits.length})`} flush>
-          {activeHabits.length === 0 && <div className="pad"><Empty title="No active habits">Things like Run, Workout, Stretch, Morning page, No alcohol.</Empty></div>}
+        <Card title={<><Icon name="check-square" size={16} />Habits <span className="badge">{activeHabits.length}</span></>} flush>
+          {activeHabits.length === 0 && <div className="pad"><Empty icon="check-square" title="No active habits">Things like Run, Workout, Stretch, Morning page, No alcohol.</Empty></div>}
           <ul className="manage-list">
             {activeHabits.map((h, i) => (
               <li key={h.id}>
-                <div className="order"><button className="btn ghost sm" disabled={i === 0} onClick={() => move(activeHabits, h.id, -1, `${V1}/habits/reorder`)} aria-label="Move up">↑</button><button className="btn ghost sm" disabled={i === activeHabits.length - 1} onClick={() => move(activeHabits, h.id, 1, `${V1}/habits/reorder`)} aria-label="Move down">↓</button></div>
-                <button className="item" onClick={() => setEditHabit(h)}>
+                <div className="order"><button type="button" className="btn ghost icon-only xs" disabled={i === 0} onClick={() => move(activeHabits, h.id, -1, `${V1}/habits/reorder`)} aria-label="Move up"><Icon name="chevron-up" size={14} /></button><button type="button" className="btn ghost icon-only xs" disabled={i === activeHabits.length - 1} onClick={() => move(activeHabits, h.id, 1, `${V1}/habits/reorder`)} aria-label="Move down"><Icon name="chevron-down" size={14} /></button></div>
+                <button type="button" className="item" onClick={() => setEditHabit(h)}>
                   {h.color && <span className="swatch" style={{ background: h.color }} />}
                   <span className="nm">{h.name}</span>
                   <span className="muted small">{daysLabel(h.days)} · since {h.start_date}{h.end_date ? ` · until ${h.end_date}` : ''}</span>
                 </button>
                 <div className="row">
-                  <button className="btn ghost sm" title="Take it off next month's page" onClick={() => setConfirm({ title: `Stop tracking “${h.name}”?`, message: `It stays on ${monthTitle(currentMonth())}'s page and disappears from ${monthTitle(shiftMonth(currentMonth(), 1))} onwards. History is kept.`, run: () => run(() => api.post(`${V1}/habits/${h.id}/end`, {}), 'Habit ends this month') })}>End</button>
-                  <button className="btn ghost sm danger-text" title="Delete the habit and all its marks" onClick={() => setConfirm({ title: `Delete “${h.name}”?`, message: 'This also deletes every day you marked for it. To keep the history, use End instead.', run: () => run(() => api.del(`${V1}/habits/${h.id}`), 'Habit deleted') })}>Delete</button>
+                  <button type="button" className="btn ghost sm" title="Take it off next month's page" onClick={() => setConfirm({ title: `Stop tracking “${h.name}”?`, message: `It stays on ${monthTitle(currentMonth())}'s page and disappears from ${monthTitle(shiftMonth(currentMonth(), 1))} onwards. History is kept.`, run: () => run(() => api.post(`${V1}/habits/${h.id}/end`, {}), 'Habit ends this month') })}>End</button>
+                  <button type="button" className="btn ghost sm danger-text" title="Delete the habit and all its marks" onClick={() => setConfirm({ title: `Delete “${h.name}”?`, message: 'This also deletes every day you marked for it. To keep the history, use End instead.', run: () => run(() => api.del(`${V1}/habits/${h.id}`), 'Habit deleted') })}>Delete</button>
                 </div>
               </li>
             ))}
@@ -64,27 +78,27 @@ export default function Manage() {
             <ul className="manage-list ended">
               {endedHabits.map(h => (
                 <li key={h.id}>
-                  <button className="item" onClick={() => setEditHabit(h)}><span className="nm">{h.name}</span><span className="muted small">{h.start_date} → {h.end_date}</span></button>
-                  <div className="row"><button className="btn ghost sm" onClick={() => run(() => api.post(`${V1}/habits/${h.id}/resume`), 'Habit resumed')}>Resume</button><button className="btn ghost sm danger-text" onClick={() => setConfirm({ title: `Delete “${h.name}”?`, message: 'This also deletes every day you marked for it. To keep the history, leave it ended instead.', run: () => run(() => api.del(`${V1}/habits/${h.id}`), 'Habit deleted') })}>Delete</button></div>
+                  <button type="button" className="item" onClick={() => setEditHabit(h)}><span className="nm">{h.name}</span><span className="muted small">{h.start_date} → {h.end_date}</span></button>
+                  <div className="row"><button type="button" className="btn ghost sm" onClick={() => run(() => api.post(`${V1}/habits/${h.id}/resume`), 'Habit resumed')}>Resume</button><button type="button" className="btn ghost sm danger-text" onClick={() => setConfirm({ title: `Delete “${h.name}”?`, message: 'This also deletes every day you marked for it. To keep the history, leave it ended instead.', run: () => run(() => api.del(`${V1}/habits/${h.id}`), 'Habit deleted') })}>Delete</button></div>
                 </li>
               ))}
             </ul>
           </>}
         </Card>
 
-        <Card title={`Trackers (${activeTrackers.length})`} flush>
-          {activeTrackers.length === 0 && <div className="pad"><Empty title="No trackers">A 1–5 sleep score and day rating, plus weight, is the classic set.</Empty></div>}
+        <Card title={<><Icon name="sliders" size={16} />Trackers <span className="badge">{activeTrackers.length}</span></>} flush>
+          {activeTrackers.length === 0 && <div className="pad"><Empty icon="sliders" title="No trackers">A 1–5 sleep score and day rating, plus weight, is the classic set.</Empty></div>}
           <ul className="manage-list">
             {activeTrackers.map((t, i) => (
               <li key={t.id}>
-                <div className="order"><button className="btn ghost sm" disabled={i === 0} onClick={() => move(activeTrackers, t.id, -1, `${V1}/trackers/reorder`)} aria-label="Move up">↑</button><button className="btn ghost sm" disabled={i === activeTrackers.length - 1} onClick={() => move(activeTrackers, t.id, 1, `${V1}/trackers/reorder`)} aria-label="Move down">↓</button></div>
-                <button className="item" onClick={() => setEditTracker(t)}>
+                <div className="order"><button type="button" className="btn ghost icon-only xs" disabled={i === 0} onClick={() => move(activeTrackers, t.id, -1, `${V1}/trackers/reorder`)} aria-label="Move up"><Icon name="chevron-up" size={14} /></button><button type="button" className="btn ghost icon-only xs" disabled={i === activeTrackers.length - 1} onClick={() => move(activeTrackers, t.id, 1, `${V1}/trackers/reorder`)} aria-label="Move down"><Icon name="chevron-down" size={14} /></button></div>
+                <button type="button" className="item" onClick={() => setEditTracker(t)}>
                   <span className="nm">{t.name}</span>
                   <span className="muted small">{t.kind === 'scale' ? `scale ${t.min_value}–${t.max_value}` : t.kind === 'yesno' ? 'yes / no' : `number${t.unit ? ' · ' + t.unit : ''}`}{t.kind === 'yesno' ? (t.higher_is_better ? ' · yes is good' : ' · yes is bad') : t.higher_is_better ? '' : ' · lower is better'}</span>
                 </button>
                 <div className="row">
-                  <button className="btn ghost sm" title="Take it off next month's page" onClick={() => setConfirm({ title: `Stop tracking “${t.name}”?`, message: 'It stays on this month’s page and disappears from next month. History is kept.', run: () => run(() => api.post(`${V1}/trackers/${t.id}/end`, {}), 'Tracker ends this month') })}>End</button>
-                  <button className="btn ghost sm danger-text" title="Delete the tracker and all its values" onClick={() => setConfirm({ title: `Delete “${t.name}”?`, message: 'This also deletes every value recorded for it. To keep the history, use End instead.', run: () => run(() => api.del(`${V1}/trackers/${t.id}`), 'Tracker deleted') })}>Delete</button>
+                  <button type="button" className="btn ghost sm" title="Take it off next month's page" onClick={() => setConfirm({ title: `Stop tracking “${t.name}”?`, message: 'It stays on this month’s page and disappears from next month. History is kept.', run: () => run(() => api.post(`${V1}/trackers/${t.id}/end`, {}), 'Tracker ends this month') })}>End</button>
+                  <button type="button" className="btn ghost sm danger-text" title="Delete the tracker and all its values" onClick={() => setConfirm({ title: `Delete “${t.name}”?`, message: 'This also deletes every value recorded for it. To keep the history, use End instead.', run: () => run(() => api.del(`${V1}/trackers/${t.id}`), 'Tracker deleted') })}>Delete</button>
                 </div>
               </li>
             ))}
@@ -94,8 +108,8 @@ export default function Manage() {
             <ul className="manage-list ended">
               {endedTrackers.map(t => (
                 <li key={t.id}>
-                  <button className="item" onClick={() => setEditTracker(t)}><span className="nm">{t.name}</span><span className="muted small">{t.start_date} → {t.end_date}</span></button>
-                  <div className="row"><button className="btn ghost sm" onClick={() => run(() => api.post(`${V1}/trackers/${t.id}/resume`), 'Tracker resumed')}>Resume</button><button className="btn ghost sm danger-text" onClick={() => setConfirm({ title: `Delete “${t.name}”?`, message: 'This also deletes every value recorded for it.', run: () => run(() => api.del(`${V1}/trackers/${t.id}`), 'Tracker deleted') })}>Delete</button></div>
+                  <button type="button" className="item" onClick={() => setEditTracker(t)}><span className="nm">{t.name}</span><span className="muted small">{t.start_date} → {t.end_date}</span></button>
+                  <div className="row"><button type="button" className="btn ghost sm" onClick={() => run(() => api.post(`${V1}/trackers/${t.id}/resume`), 'Tracker resumed')}>Resume</button><button type="button" className="btn ghost sm danger-text" onClick={() => setConfirm({ title: `Delete “${t.name}”?`, message: 'This also deletes every value recorded for it.', run: () => run(() => api.del(`${V1}/trackers/${t.id}`), 'Tracker deleted') })}>Delete</button></div>
                 </li>
               ))}
             </ul>
@@ -149,7 +163,7 @@ function HabitModal({ habit, onClose, onSaved, onDelete }: { habit: Partial<Habi
           </div>
         </Field>
         <Field label="Colour (optional)">
-          <div className="row wrap">{COLORS.map(c => <button type="button" key={c || 'none'} className={`color-dot ${f.color === c ? 'active' : ''}`} style={{ background: c || 'transparent' }} onClick={() => setF({ ...f, color: c })} aria-label={c || 'no colour'}>{c ? '' : '∅'}</button>)}</div>
+          <div className="row wrap">{COLORS.map(c => <button type="button" key={c || 'none'} className={`color-dot ${f.color === c ? 'active' : ''}`} style={{ background: c || 'transparent' }} onClick={() => setF({ ...f, color: c })} aria-label={c || 'no colour'} title={c || 'No colour'}>{c ? '' : <Icon name="minus" size={14} />}</button>)}</div>
         </Field>
         <div className="two-col tight">
           <Field label="Start date" help="First day it appears on a page."><input type="date" value={f.start_date} onChange={e => setF({ ...f, start_date: e.target.value })} required /></Field>
@@ -159,7 +173,7 @@ function HabitModal({ habit, onClose, onSaved, onDelete }: { habit: Partial<Habi
           {habit.id && <button type="button" className="btn ghost danger-text" onClick={() => onDelete(habit as Habit)}>Delete</button>}
           <span className="spacer" />
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn primary" disabled={busy}>{habit.id ? 'Save' : 'Add habit'}</button>
+          <button type="submit" className="btn primary" disabled={busy}>{habit.id ? 'Save' : 'Add habit'}</button>
         </div>
       </form>
     </Modal>
@@ -219,7 +233,7 @@ function TrackerModal({ tracker, onClose, onSaved, onDelete }: { tracker: Partia
           {tracker.id && <button type="button" className="btn ghost danger-text" onClick={() => onDelete(tracker as Tracker)}>Delete</button>}
           <span className="spacer" />
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn primary" disabled={busy}>{tracker.id ? 'Save' : 'Add tracker'}</button>
+          <button type="submit" className="btn primary" disabled={busy}>{tracker.id ? 'Save' : 'Add tracker'}</button>
         </div>
       </form>
     </Modal>
