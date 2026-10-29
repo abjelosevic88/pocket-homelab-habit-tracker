@@ -69,9 +69,9 @@ func TestCoreLinkScopes(t *testing.T) {
 	}
 	aid, bid := itoa(ah.ID), itoa(bh.ID)
 
-	// habits:read — the list, one habit, a day; only B's
+	// habits:read — the list, one habit, a day, a month; only B's
 	for _, c := range []*client{full, read} {
-		for _, path := range []string{"/api/v1/habits", "/api/v1/habits/" + bid, "/api/v1/days/" + today} {
+		for _, path := range []string{"/api/v1/habits", "/api/v1/habits/" + bid, "/api/v1/days/" + today, "/api/v1/months/" + today[:7]} {
 			code, body := c.do("GET", path, "")
 			if code != 200 || !strings.Contains(body, "Cooked at home") || strings.Contains(body, "Secret habit") {
 				t.Errorf("%s GET %s = %d %s", c.tok, path, code, body)
@@ -120,7 +120,7 @@ func TestCoreLinkScopes(t *testing.T) {
 	if code, _ := read.do("DELETE", "/api/v1/habits/"+bid+"/entries/"+today, ""); code != 403 {
 		t.Errorf("read-only link cleared a habit: %d", code)
 	}
-	for _, path := range []string{"/api/v1/habits", "/api/v1/habits/" + bid, "/api/v1/days/" + today} {
+	for _, path := range []string{"/api/v1/habits", "/api/v1/habits/" + bid, "/api/v1/days/" + today, "/api/v1/months/" + today[:7]} {
 		if code, _ := write.do("GET", path, ""); code != 403 {
 			t.Errorf("write-only link read %s: %d", path, code)
 		}

@@ -16,7 +16,7 @@ import (
 // scopes. Every route not listed in linkRoutes stays closed to it.
 
 var linkOffers = []core.Offer{
-	{Scope: "habits:read", Name: "See your habits", Description: "List your habits and see a day's check-ins, so the app can show or tick them."},
+	{Scope: "habits:read", Name: "See your habits", Description: "List your habits and see a day's or a month's check-ins, so the app can show, chart or tick them."},
 	{Scope: "entries:write", Name: "Tick off habits", Description: "Check a habit in or out for a day, for example \"Cooked at home\" when you cook a recipe."},
 }
 
@@ -31,6 +31,7 @@ var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/habits$`), "habits:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/habits/\d+$`), "habits:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/days/\d{4}-\d{2}-\d{2}$`), "habits:read"},
+	{"GET", regexp.MustCompile(`^/api/v1/months/\d{4}-\d{2}$`), "habits:read"},
 	{"PUT DELETE", regexp.MustCompile(`^/api/v1/habits/\d+/entries/\d{4}-\d{2}-\d{2}$`), "entries:write"},
 }
 
