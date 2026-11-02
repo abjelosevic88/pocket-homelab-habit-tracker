@@ -60,7 +60,8 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
 
   if (isYesNo) {
     const yes = pts.filter(p => p.v === 1).length
-    const YH = 52
+    const no = pts.filter(p => p.v === 0 && !tracker.defaulted?.[p.d.date]).length
+    const YH = 40, BOX = 18
     const yesTone = tracker.higher_is_better ? 'good' : 'bad', noTone = tracker.higher_is_better ? 'bad' : 'good'
     return (
       <div className="tracker-row yesno">
@@ -71,14 +72,24 @@ export default function TrackerChart({ days, tracker, onSet }: Props) {
             <div className="tracker-label"><strong>{tracker.name}</strong><span className="muted small">yes / no</span></div>
           </foreignObject>
           {days.map((d, i) => {
+            // A checkbox per day: ✓ filled for yes, ✕ outlined for no, an empty box when not answered.
             const v = tracker.entries[d.date]
             const dflt = tracker.defaulted?.[d.date]
-            const cls = `${v === 1 ? `yn-dot ${yesTone}` : v === 0 ? `yn-dot ${noTone} no` : 'yn-dot empty'} ${dflt ? 'implicit' : ''}`
-            return <circle key={d.date} className={cls} cx={x(i)} cy={YH / 2} r={v === undefined ? 3 : dflt ? 6 : 7}><title>{`${shortDate(d.date)}: ${v === 1 ? 'yes' : v === 0 ? 'no' : d.future ? '' : 'not marked — click to cycle'}${dflt ? ' (by default)' : ''}`}</title></circle>
+            const tone = v === 1 ? yesTone : v === 0 ? noTone : ''
+            const cls = ['yn-box', v === 1 ? 'yes' : v === 0 ? 'no' : 'empty', tone, dflt ? 'implicit' : '', d.future ? 'future' : '', d.today ? 'today' : ''].join(' ')
+            const cx = x(i), cy = YH / 2, s = BOX
+            return (
+              <g key={d.date} className={cls}>
+                <title>{`${shortDate(d.date)}: ${v === 1 ? 'yes' : v === 0 ? 'no' : d.future ? '' : 'not answered — click: yes, no, clear'}${dflt ? ' (by default)' : ''}`}</title>
+                <rect x={cx - s / 2} y={cy - s / 2} width={s} height={s} rx={4} />
+                {v === 1 && <path d={`M${cx - 4.5},${cy + 0.2} L${cx - 1.3},${cy + 3.4} L${cx + 4.8},${cy - 3.6}`} />}
+                {v === 0 && <path d={`M${cx - 3.4},${cy - 3.4} L${cx + 3.4},${cy + 3.4} M${cx + 3.4},${cy - 3.4} L${cx - 3.4},${cy + 3.4}`} />}
+              </g>
+            )
           })}
           {days.map((d, i) => <rect key={d.date + 'h'} className={`hit ${d.future ? 'future' : ''}`} x={NAME + i * COL} y={0} width={COL} height={YH} onClick={() => open(d)} />)}
           <foreignObject x={NAME + days.length * COL} y={0} width={SUM} height={YH}>
-            <div className="tracker-sum"><strong>{yes}</strong><span className="muted small">yes</span></div>
+            <div className="tracker-sum"><strong>{yes}</strong><span className="muted small">yes{no ? ` · ${no} no` : ''}</span></div>
           </foreignObject>
         </svg>
       </div>
