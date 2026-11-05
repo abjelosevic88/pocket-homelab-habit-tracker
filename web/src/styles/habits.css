@@ -280,7 +280,6 @@
 .important-list li { border-bottom: 1px dashed var(--border); }
 .important-list li:last-child { border-bottom: 0; }
 .important-list button { all: unset; display: flex; gap: 10px; width: 100%; padding: 6px 0; cursor: pointer; }
-.important-list button:hover .itext { text-decoration: underline; }
 .important-list .jdate { width: 96px; flex-shrink: 0; font-size: 12px; color: var(--red-ink); font-weight: 600; }
 .important-list .itext { white-space: pre-wrap; }
 
