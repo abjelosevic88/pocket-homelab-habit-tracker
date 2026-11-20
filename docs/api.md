@@ -88,7 +88,8 @@ Trackers mirror this under `/trackers`: `{"name","kind":"scale"|"number"|"yesno"
 | `GET` / `POST` / `DELETE` | `/tokens`, `/tokens/{id}` | Personal tokens (plaintext shown once). |
 | `GET` | `/backup` | Consistent SQLite copy (admin only, and only while nobody else has an account: 403 otherwise). |
 | `GET` | `/export.json`, `/export.csv` | Everything. |
-| `POST` | `/import` | Merge an export JSON (match by name, upsert entries). |
+| `POST` | `/import` | Merge an export JSON (habits and trackers matched by name; only days and journal lines not there yet are added, so a second run adds nothing). |
+| `GET` | `/pocket/portable` | Pocket Move can copy your habits out and bring them in (link scopes `move:export`, `move:import`). |
 | `GET` | `/healthz`, `/readyz`, `/metrics` | Unauthenticated, outside `/api/v1`. |
 
 ## Recipes

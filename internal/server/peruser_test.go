@@ -41,7 +41,7 @@ func newFakeCore(t *testing.T) *fakeCore {
 		c.mu.Unlock()
 		if isLink {
 			json.NewEncoder(w).Encode(map[string]any{"active": true, "kind": "delegated", "scope": l[2], "audience": "habits",
-				"user": map[string]any{"id": 9, "email": l[0], "name": l[1], "role": "member"}, "app": map[string]any{"id": 3, "slug": "kitchen", "name": "Pocket Kitchen"}})
+				"user": map[string]any{"id": 9, "sub": l[0], "email": l[0], "name": l[1], "role": "member"}, "app": map[string]any{"id": 3, "slug": "kitchen", "name": "Pocket Kitchen"}})
 			return
 		}
 		if !ok {

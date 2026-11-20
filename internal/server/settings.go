@@ -394,7 +394,8 @@ func (s *Server) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleImportJSON merges an export file: habits/trackers are matched by name
-// (created when missing), entries and journal lines are upserted.
+// (created when missing); entries and journal lines are added where the day
+// has none yet, so it never overwrites and a second run adds nothing.
 func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 	var ex Export
 	if err := decode(r, &ex); err != nil {
@@ -448,28 +449,57 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		tmap[t.ID] = id
 	}
+	// only what is not there yet: a day already marked, a value already
+	// written or a journal line already kept stays as the person left it
+	haveH, _ := s.store.HabitEntries(ctx, uid, "0000-01-01", "9999-12-31")
+	haveT, _ := s.store.TrackerEntries(ctx, uid, "0000-01-01", "9999-12-31")
+	haveJ, _ := s.store.JournalFull(ctx, uid, "0000-01-01", "9999-12-31")
 	n := 0
 	for _, e := range ex.HabitEntries {
-		if id, ok := hmap[e.HabitID]; ok && validDate(e.Date) {
-			if err := s.store.SetHabitEntry(ctx, uid, id, e.Date, e.Status); err == nil {
-				n++
-			}
+		id, ok := hmap[e.HabitID]
+		if !ok || !validDate(e.Date) || e.Status == 0 {
+			continue
+		}
+		if _, had := haveH[id][e.Date]; had {
+			continue
+		}
+		if err := s.store.SetHabitEntry(ctx, uid, id, e.Date, e.Status); err == nil {
+			n++
 		}
 	}
 	for _, e := range ex.TrackerEntries {
-		if id, ok := tmap[e.TrackerID]; ok && validDate(e.Date) {
-			v := e.Value
-			if err := s.store.SetTrackerEntry(ctx, uid, id, e.Date, &v); err == nil {
-				n++
-			}
+		id, ok := tmap[e.TrackerID]
+		if !ok || !validDate(e.Date) {
+			continue
+		}
+		if _, had := haveT[id][e.Date]; had {
+			continue
+		}
+		v := e.Value
+		if err := s.store.SetTrackerEntry(ctx, uid, id, e.Date, &v); err == nil {
+			n++
 		}
 	}
 	for _, j := range ex.Journal {
-		if validDate(j.Date) && (j.Text != "" || j.Bad != "" || j.Important != "") {
-			text, bad, important := j.Text, j.Bad, j.Important
-			if err := s.store.SetJournalFields(ctx, uid, j.Date, &text, &bad, &important); err == nil {
-				n++
-			}
+		if !validDate(j.Date) {
+			continue
+		}
+		cur := haveJ[j.Date]
+		var text, bad, important *string
+		if j.Text != "" && cur.Text == "" {
+			text = &j.Text
+		}
+		if j.Bad != "" && cur.Bad == "" {
+			bad = &j.Bad
+		}
+		if j.Important != "" && cur.Important == "" {
+			important = &j.Important
+		}
+		if text == nil && bad == nil && important == nil {
+			continue
+		}
+		if err := s.store.SetJournalFields(ctx, uid, j.Date, text, bad, important); err == nil {
+			n++
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"created": created, "entries": n})

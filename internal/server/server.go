@@ -223,6 +223,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/export.json", s.handleExportJSON)
 			r.Get("/export.csv", s.handleExportCSV)
 			r.Post("/import", s.handleImportJSON)
+			r.Get(strings.TrimPrefix(core.PortablePath, "/api/v1"), portable.Handler())
 		})
 	})
 
@@ -326,6 +327,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "HABITS",
 		Publishes: []string{"habits.marked", "habits.unmarked", "habits.tracked", "habits.checkin"},
 		Offers:    linkOffers,
+		Portable:  portable,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration
