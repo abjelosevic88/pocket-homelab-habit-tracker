@@ -181,9 +181,11 @@ function JournalInput({ date, field, value, placeholder, onSaved }: { date: stri
     setSaving(true)
     try { await api.put(`${V1}/journal/${date}`, { [field]: v }); last.current = v; onSaved(date, v) } catch (e) { toast((e as Error).message, 'err') } finally { setSaving(false) }
   }
+  // A day can hold several lines (the check-in page, a line kept from Pocket Hub); a one-line
+  // field drops line breaks and would glue the words together, so they show as spaces here.
   return (
     <span className={`jfield ${field}`}>
-      <input value={v} onChange={e => setV(e.target.value)} onBlur={save} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} placeholder={placeholder} maxLength={4000} />
+      <input value={v.replace(/\s*\n\s*/g, ' ')} onChange={e => setV(e.target.value)} onBlur={save} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} placeholder={placeholder} maxLength={4000} />
       {saving && <span className="spinner sm" />}
     </span>
   )

@@ -32,6 +32,18 @@ var portable = &core.Portable{
 	},
 }
 
+// capabilities are what Pocket Search, Pocket Day and Pocket Hub may ask of
+// Habits without knowing anything about it (docs/capabilities.md in
+// pocket-homelab-core): one fixed route each, in capabilities.go, run as the
+// person the caller acts for.
+var capabilities = core.Capabilities{
+	Search: &core.Searchable{What: "Your habits, by name, and what you wrote in the journal", Kinds: []string{"habit", "journal"}, Bangs: []string{"habits", "habit"}},
+	Day:    &core.DayFeed{Label: "Habits", One: "habit", Many: "habits", Unit: "count", What: "The habits planned for that day and whether you did them, and what you wrote in the journal"},
+	Widget: &core.Widget{Title: "Habits today", What: "Today's habits, the ones still to do first, and how many are done"},
+	Capture: &core.QuickCapture{Kinds: []core.CaptureKind{{Kind: "journal", Label: "Journal line",
+		What: "A line added to today's journal, or another day's, under what is already there", Fields: []string{"date"}}}},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -50,7 +62,7 @@ var linkRoutes = []linkRoute{
 var errLinkScope = errors.New("outside the link's scope")
 
 func linkAllows(scopes []string, r *http.Request) bool {
-	if portable.LinkAllows(scopes, r) {
+	if portable.LinkAllows(scopes, r) || capabilities.LinkAllows(scopes, r) {
 		return true
 	}
 	for _, lr := range linkRoutes {

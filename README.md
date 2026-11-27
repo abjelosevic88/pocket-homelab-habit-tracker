@@ -111,6 +111,8 @@ Everything else is in [docs/api.md](docs/api.md), including a Homepage `customap
 
 **App links (Pocket Core):** another Pocket app the person allowed in Core can act for them here with a five-minute `pcx_` token. Habits offers `habits:read` ("See your habits": `GET /habits`, `/habits/{id}`, `/days/{date}`) and `entries:write` ("Tick off habits": `PUT`/`DELETE /habits/{id}/entries/{date}`); `GET /auth/me` answers any linked app. The token acts as that person and sees only their habits; every other route answers 403. Pocket Day reads the day and Pocket Kitchen ticks "Cooked at home". Each link can be switched off in Core → **Links** (box-wide) or under **Settings → Apps acting for me** (per person).
 
+**Found by Pocket Search, Day and Hub on their own:** Habits tells Pocket Core what it can do, so those apps need no list of their own. Pocket Search finds your habits by name and your journal by its words (`!habits` or `!habit` looks only here). Pocket Day can read a day: which planned habits you did or missed, and what you wrote. Pocket Hub shows a **Habits today** widget with the ones still to do first, and can keep a quick line in your journal, added under what is already there, never over it. Each is its own link in Core (`pocket:search`, `pocket:day`, `pocket:widget`, `pocket:capture`) and opens only its one route; the routes are in [docs/api.md](docs/api.md).
+
 ## Companion app: Pocket Homelab
 
 [Pocket Homelab](https://pockethomelab.com/) is a native app for iPhone, iPad, Mac and Android that talks to self-hosted services, and Pocket Habits is one of them. It connects with an API token and gives you:

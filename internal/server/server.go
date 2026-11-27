@@ -224,6 +224,12 @@ func (s *Server) Router() http.Handler {
 			r.Get("/export.csv", s.handleExportCSV)
 			r.Post("/import", s.handleImportJSON)
 			r.Get(strings.TrimPrefix(core.PortablePath, "/api/v1"), portable.Handler())
+
+			// what Pocket Search, Pocket Day and Pocket Hub ask (capabilities.go)
+			r.Get("/pocket/search", core.SearchHandler(s.pocketSearch))
+			r.Get("/pocket/day/{date}", core.DayHandler(s.pocketDay))
+			r.Get("/pocket/widget", core.WidgetHandler(s.pocketWidget))
+			r.Post("/pocket/capture", capabilities.Capture.CaptureHandler(s.pocketCapture))
 		})
 	})
 
@@ -319,21 +325,27 @@ func (s *Server) coreLoop(ctx context.Context) {
 	}
 }
 
-func (s *Server) registerWithCore(ctx context.Context) error {
+// manifest is what Habits tells Pocket Core about itself.
+func (s *Server) manifest() core.Manifest {
 	m := core.Manifest{
 		Slug: "habits", Name: "Pocket Habits",
 		Description: "A self-hosted habit tracker that copies the one-page bullet-journal spread that actually sticks.",
 		Icon:        "/favicon.svg", Version: Version,
-		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "HABITS",
-		Publishes: []string{"habits.marked", "habits.unmarked", "habits.tracked", "habits.checkin"},
-		Offers:    linkOffers,
-		Portable:  portable,
+		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "HABITS", Category: "Everyday",
+		Publishes:    []string{"habits.marked", "habits.unmarked", "habits.tracked", "habits.checkin"},
+		Offers:       linkOffers,
+		Portable:     portable,
+		Capabilities: capabilities,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration
 		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.cfg.BaseURL + "/api/v1/auth/oidc/callback"}}
 	}
-	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, m)
+	return m
+}
+
+func (s *Server) registerWithCore(ctx context.Context) error {
+	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, s.manifest())
 	if err != nil {
 		return err
 	}

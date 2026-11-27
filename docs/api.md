@@ -19,8 +19,23 @@ With Pocket Core on the box, another Pocket app can act for a person with a five
 | (any link) | | `GET /auth/me` |
 | `habits:read` | See your habits | `GET /habits`, `GET /habits/{id}`, `GET /days/{date}` |
 | `entries:write` | Tick off habits | `PUT /habits/{id}/entries/{date}`, `DELETE /habits/{id}/entries/{date}` |
+| `pocket:search` | Find your things | `GET /pocket/search` |
+| `pocket:day` | See what happened on a day | `GET /pocket/day/{date}` |
+| `pocket:widget` | Show a summary | `GET /pocket/widget` |
+| `pocket:capture` | Keep a quick line | `POST /pocket/capture` |
 
 Anything else answers `403` ("this Pocket Core link does not cover …"). Events published for a change made through a link carry `"via": "<acting app slug>"`. Links are switched on and off in Core → **Links** (box-wide) and **Settings → Apps acting for me** (per person).
+
+### What Pocket Search, Pocket Day and Pocket Hub ask
+
+Habits says in its Pocket Core manifest what it can do for the apps that bring everything together (category `Everyday`), and answers on the four routes every Pocket app uses for it. They work with a session or a `ph_` token too, always as the signed-in person.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/pocket/search?q=&limit=` | Your habits by name (the ones still running first, `kind` `habit`), then the journal days that have the words in the good line, the bad line or the important note, newest first (`kind` `journal`, the snippet is the line that matches). Every word has to be there, in any order. `!habits` and `!habit` in Pocket Search look only here. |
+| `GET` | `/pocket/day/{date}` | The day `GET /days/{date}` gives: one item for each habit planned that day (`kind` `done`, `missed` or `open`), then the journal lines (`kind` `journal`, the text in `note`). `summary` is like "4 of 6 habits done, journal written"; the metric `Done` is "4 of 6". A day with no habits and nothing written is empty. |
+| `GET` | `/pocket/widget` | Today's habits, the ones still to mark first, then missed, then done; `line` is "2 left today", "3 of 4 done today" or "All done today". The first two `metrics` are always `Done` and `Scheduled`, whole numbers (the day's `done` and `total`): Pocket Hub's phone apps draw the habit ring from them. |
+| `POST` | `/pocket/capture` | `{"request_id": "…", "kind": "journal", "text": "…", "date": "YYYY-MM-DD"}` adds a line to the journal of today (or of `date`, not a day ahead), on a line of its own under what is already written. It never replaces text, unlike `POST /checkin` and `PUT /journal/{date}`. The same `request_id` again answers the same and adds nothing. A day's journal holds 4000 characters; a line that no longer fits is refused with `400`. Publishes `habits.checkin`. |
 
 For a ready-made client, [Pocket Homelab](https://pockethomelab.com/) (iPhone, iPad, Mac, Android) uses this API with a token: the check-in, the month page, the dashboard, insights, and the habits and trackers. See the README's [Companion app](../README.md#companion-app-pocket-homelab) section.
 

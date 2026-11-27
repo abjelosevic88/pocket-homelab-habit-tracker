@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
+	"strings"
 )
 
 // JournalEntry is one day's lines.
@@ -54,6 +55,40 @@ func setJournalFields(ctx context.Context, db entrySQL, uid int64, date string, 
 		ON CONFLICT(user_id, date) DO UPDATE SET text = excluded.text, bad_text = excluded.bad_text, important = excluded.important, updated_at = excluded.updated_at`,
 		uid, date, cur.Text, cur.Bad, cur.Important, Now())
 	return err
+}
+
+// JournalMax is the most one journal field holds (the pages and PUT /journal stop there too).
+const JournalMax = 4000
+
+// ErrJournalFull is returned when a line no longer fits in the day's journal.
+var ErrJournalFull = errors.New("the day's journal is full")
+
+// AppendJournal adds a line under the day's good line and returns the whole text. What is
+// already written stays exactly as it is: the new line goes on a line of its own after it,
+// and the bad line and the important note are not touched. The read, the write and the
+// hooks share one transaction, so two lines added at the same moment both stay.
+func (s *Store) AppendJournal(ctx context.Context, uid int64, date, line string, after ...core.CommitHook) (string, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	var text string
+	err = tx.QueryRowContext(ctx, `SELECT text FROM journal WHERE user_id = ? AND date = ?`, uid, date).Scan(&text)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	text += line
+	if len(text) > JournalMax {
+		return "", ErrJournalFull
+	}
+	if err := setJournalFields(ctx, tx, uid, date, &text, nil, nil); err != nil {
+		return "", err
+	}
+	return text, core.Commit(tx, after...)
 }
 
 // SetJournal writes the day's good line; a nil bad leaves the bad line untouched.
